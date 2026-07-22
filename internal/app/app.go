@@ -58,6 +58,7 @@ type model struct {
 	formCommand      *commands.Command
 	formOptionMemory map[string]map[string]string
 	pendingForm      *commands.BuildResult
+	pendingArgs      []string
 
 	// Placeholder editing (in preview)
 	placeholders  []string
@@ -72,6 +73,7 @@ type model struct {
 	executionID       int
 	outputCmd         string
 	outputDifficulty  string
+	outputArgs        []string
 	pendingCommand    string
 	pendingDifficulty string
 
@@ -294,11 +296,16 @@ func (m model) isKnownCommand(s string) bool {
 }
 
 func (m model) executeCommand(command string) (tea.Model, tea.Cmd) {
+	return m.executeCommandWithArgs(command, nil)
+}
+
+func (m model) executeCommandWithArgs(command string, structuredArgs []string) (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFn = cancel
 	m.running = true
 	m.executionID++
 	m.outputCmd = command
+	m.outputArgs = append([]string(nil), structuredArgs...)
 	m.outputResult = nil
 	m.lastCopied = ""
 	m.currentView = viewOutput
@@ -307,7 +314,10 @@ func (m model) executeCommand(command string) (tea.Model, tea.Cmd) {
 
 	cmd := func() tea.Msg {
 		start := time.Now()
-		args := commands.ParseCommand(command)
+		args := structuredArgs
+		if args == nil {
+			args = commands.ParseCommand(command)
+		}
 		var execCmd *exec.Cmd
 		if len(args) > 0 {
 			execCmd = exec.CommandContext(ctx, args[0], args[1:]...)
@@ -374,14 +384,15 @@ func (m model) executeCommand(command string) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(tea.Sequence(tea.Println(""), cmd))
 }
 
-func (m model) executeOrConfirm(command, difficulty string) (tea.Model, tea.Cmd) {
+func (m model) executeOrConfirm(command, difficulty string, structuredArgs []string) (tea.Model, tea.Cmd) {
 	if difficulty == "intermediate" || difficulty == "advanced" {
 		m.pendingCommand = command
+		m.pendingArgs = append([]string(nil), structuredArgs...)
 		m.pendingDifficulty = difficulty
 		m.currentView = viewConfirm
 		return m, nil
 	}
-	return m.executeCommandWithDifficulty(command, difficulty)
+	return m.executeCommandWithDifficulty(command, difficulty, structuredArgs)
 }
 
 func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -557,7 +568,7 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 					m.focusPlaceholder(m.firstEmptyPlaceholder())
 					return m, nil
 				}
-				return m.executeOrConfirm(m.substitutedCommand(), m.previewCmd.Difficulty)
+				return m.executeOrConfirm(m.substitutedCommand(), m.previewCmd.Difficulty, nil)
 			}
 		} else if m.currentView == viewForm {
 			return m.handleFormKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -592,7 +603,7 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 		// footer "1-6 Category" -> no-op on click (needs a specific number)
 	case "rerun":
 		if m.currentView == viewOutput {
-			return m.executeOrConfirm(m.outputCmd, m.outputDifficulty)
+			return m.executeOrConfirm(m.outputCmd, m.outputDifficulty, m.outputArgs)
 		}
 	case "copycmd":
 		if m.currentView == viewOutput {
@@ -852,7 +863,7 @@ func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.rememberFormOptions()
 		pending := result
 		m.pendingForm = &pending
-		return m, nil
+		return m.executeOrConfirm(result.Display, m.formCommand.Difficulty, result.Args)
 	case "+", "=":
 		if m.form.addRepeatableRow() {
 			m.form.focusedField = m.form.fieldCount() - 1
@@ -926,7 +937,7 @@ func (m model) handlePreviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			if m.previewCmd != nil {
-				return m.executeOrConfirm(m.previewCmd.Full, m.previewCmd.Difficulty)
+				return m.executeOrConfirm(m.previewCmd.Full, m.previewCmd.Difficulty, nil)
 			}
 		}
 		return m, nil
@@ -951,7 +962,7 @@ func (m model) handlePreviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focusPlaceholder(empty)
 			return m, nil
 		}
-		return m.executeOrConfirm(m.substitutedCommand(), m.previewCmd.Difficulty)
+		return m.executeOrConfirm(m.substitutedCommand(), m.previewCmd.Difficulty, nil)
 
 	case "tab", "down":
 		next := m.phActiveIndex + 1
@@ -985,20 +996,23 @@ func (m model) handleConfirmationKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter", "y", "Y":
 		command := m.pendingCommand
+		args := m.pendingArgs
 		difficulty := m.pendingDifficulty
 		m.pendingCommand = ""
+		m.pendingArgs = nil
 		m.pendingDifficulty = ""
-		return m.executeCommandWithDifficulty(command, difficulty)
+		return m.executeCommandWithDifficulty(command, difficulty, args)
 	case "esc", "n", "N", "q":
 		m.pendingCommand = ""
+		m.pendingArgs = nil
 		m.pendingDifficulty = ""
 		m.currentView = viewPreview
 	}
 	return m, nil
 }
 
-func (m model) executeCommandWithDifficulty(command, difficulty string) (tea.Model, tea.Cmd) {
-	result, cmd := m.executeCommand(command)
+func (m model) executeCommandWithDifficulty(command, difficulty string, structuredArgs []string) (tea.Model, tea.Cmd) {
+	result, cmd := m.executeCommandWithArgs(command, structuredArgs)
 	updated := result.(model)
 	updated.outputDifficulty = difficulty
 	return updated, cmd
@@ -1016,7 +1030,7 @@ func (m model) handleOutputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.viewportContent = ""
 		return m, nil
 	case "r":
-		return m.executeCommand(m.outputCmd)
+		return m.executeCommandWithArgs(m.outputCmd, m.outputArgs)
 	case "c":
 		clipboard.WriteAll(m.outputCmd)
 		m.lastCopied = "command"
