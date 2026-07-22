@@ -52,6 +52,10 @@ type model struct {
 	// Preview
 	previewCmd *commands.Command
 
+	// Command form state and values remembered for this app session.
+	form             *formState
+	formOptionMemory map[string]map[string]string
+
 	// Placeholder editing (in preview)
 	placeholders  []string
 	phValues      map[string]string
