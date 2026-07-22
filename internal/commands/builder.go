@@ -26,6 +26,7 @@ func Build(command []string, schema CommandSchema, argumentRows [][]string, opti
 	for _, argument := range schema.Arguments {
 		if argument.Repeatable {
 			hasRepeatable = true
+			startRow := rowIndex
 			for ; rowIndex < len(argumentRows); rowIndex++ {
 				value, ok := positionalValue(argumentRows[rowIndex])
 				if !ok {
@@ -37,6 +38,9 @@ func Build(command []string, schema CommandSchema, argumentRows [][]string, opti
 				if len(validationErrors) == 0 {
 					result.Args = append(result.Args, value)
 				}
+			}
+			if argument.Required && rowIndex == startRow {
+				result.Errors = append(result.Errors, fmt.Errorf("required argument %q is missing", argument.Name))
 			}
 			continue
 		}
@@ -70,6 +74,10 @@ func Build(command []string, schema CommandSchema, argumentRows [][]string, opti
 
 	for _, option := range schema.Options {
 		value, present := optionValues[option.Flag]
+		if option.Kind == OptionKindBoolean && option.Required && (!present || value != "true") {
+			result.Errors = append(result.Errors, fmt.Errorf("required option %q must be true", option.Flag))
+			continue
+		}
 		if !present {
 			value = option.Default
 		}

@@ -101,6 +101,38 @@ func TestBuildOmitsEmptyOptionalArgument(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsRequiredRepeatableArgumentWithoutRows(t *testing.T) {
+	schema := CommandSchema{Arguments: []Argument{{Name: "container", Required: true, Repeatable: true}}}
+	result := Build([]string{"wslc", "stop"}, schema, nil, nil)
+
+	if len(result.Errors) != 1 {
+		t.Fatalf("got %d errors, want 1: %v", len(result.Errors), result.Errors)
+	}
+}
+
+func TestBuildRejectsMissingOrFalseRequiredBoolean(t *testing.T) {
+	schema := CommandSchema{Options: []Option{{Flag: "--all", Kind: OptionKindBoolean, Required: true, Default: "true"}}}
+
+	for _, values := range []map[string]string{nil, {"--all": "false"}} {
+		result := Build([]string{"wslc", "list"}, schema, nil, values)
+		if len(result.Errors) != 1 {
+			t.Errorf("values %#v: got %d errors, want 1: %v", values, len(result.Errors), result.Errors)
+		}
+	}
+}
+
+func TestBuildAcceptsExplicitTrueRequiredBoolean(t *testing.T) {
+	schema := CommandSchema{Options: []Option{{Flag: "--all", Kind: OptionKindBoolean, Required: true}}}
+	result := Build([]string{"wslc", "list"}, schema, nil, map[string]string{"--all": "true"})
+
+	if len(result.Errors) != 0 {
+		t.Fatalf("Build returned errors: %v", result.Errors)
+	}
+	if !reflect.DeepEqual(result.Args, []string{"wslc", "list", "--all"}) {
+		t.Errorf("Args = %#v", result.Args)
+	}
+}
+
 func TestBuildKeepsExecutableArgumentsSeparateFromDisplay(t *testing.T) {
 	schema := CommandSchema{Arguments: []Argument{{Name: "value", Required: true}}}
 	result := Build([]string{"wslc", "echo"}, schema, [][]string{{`a"b`}}, nil)
