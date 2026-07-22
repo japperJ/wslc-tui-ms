@@ -57,8 +57,8 @@ type model struct {
 	form             *formState
 	formCommand      *commands.Command
 	formOptionMemory map[string]map[string]string
-	pendingForm      *commands.BuildResult
 	pendingArgs      []string
+	confirmationView view
 
 	// Placeholder editing (in preview)
 	placeholders  []string
@@ -390,6 +390,7 @@ func (m model) executeOrConfirm(command, difficulty string, structuredArgs []str
 		m.pendingCommand = command
 		m.pendingArgs = append([]string(nil), structuredArgs...)
 		m.pendingDifficulty = difficulty
+		m.confirmationView = m.currentView
 		m.currentView = viewConfirm
 		return m, nil
 	}
@@ -816,6 +817,8 @@ func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.currentView = viewCommands
 		m.form = nil
+		m.formCommand = nil
+		m.clearPendingConfirmation()
 		return m, nil
 	case "tab", "down":
 		m.form.moveFocus(1)
@@ -863,8 +866,6 @@ func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.rememberFormOptions()
-		pending := result
-		m.pendingForm = &pending
 		return m.executeOrConfirm(result.Display, m.formCommand.Difficulty, result.Args)
 	case "+", "=":
 		if m.form.addRepeatableRow() {
@@ -1000,17 +1001,33 @@ func (m model) handleConfirmationKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		command := m.pendingCommand
 		args := m.pendingArgs
 		difficulty := m.pendingDifficulty
-		m.pendingCommand = ""
-		m.pendingArgs = nil
-		m.pendingDifficulty = ""
+		m.clearPendingConfirmation()
 		return m.executeCommandWithDifficulty(command, difficulty, args)
 	case "esc", "n", "N", "q":
-		m.pendingCommand = ""
-		m.pendingArgs = nil
-		m.pendingDifficulty = ""
-		m.currentView = viewPreview
+		origin := m.confirmationView
+		// Preserve callers that entered confirmation directly from the legacy
+		// preview path before confirmation origin was tracked.
+		if origin == viewCommands && m.previewCmd != nil && m.form == nil {
+			origin = viewPreview
+		}
+		m.clearPendingConfirmation()
+		switch {
+		case origin == viewForm && m.form != nil && m.formCommand != nil:
+			m.currentView = viewForm
+		case origin == viewPreview && m.previewCmd != nil:
+			m.currentView = viewPreview
+		default:
+			m.currentView = viewCommands
+		}
 	}
 	return m, nil
+}
+
+func (m *model) clearPendingConfirmation() {
+	m.pendingCommand = ""
+	m.pendingArgs = nil
+	m.pendingDifficulty = ""
+	m.confirmationView = viewCommands
 }
 
 func (m model) executeCommandWithDifficulty(command, difficulty string, structuredArgs []string) (tea.Model, tea.Cmd) {

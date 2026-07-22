@@ -112,6 +112,7 @@ func TestConfirmationEnterExecutesPendingCommand(t *testing.T) {
 func TestConfirmationEscCancelsPendingCommand(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	m.currentView = viewConfirm
+	m.previewCmd = &commands.Command{Full: "wslc system prune", Difficulty: "advanced"}
 	m.pendingCommand = "wslc system prune"
 	m.pendingDifficulty = "advanced"
 
@@ -122,6 +123,34 @@ func TestConfirmationEscCancelsPendingCommand(t *testing.T) {
 	}
 	if got.pendingCommand != "" {
 		t.Errorf("expected pending command cleared, got %q", got.pendingCommand)
+	}
+}
+
+func TestConfirmationCancelReturnsToGuidedForm(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	command := commands.Command{
+		Name: "run",
+		Full: "wslc run",
+		Schema: &commands.CommandSchema{
+			Arguments: []commands.Argument{{Name: "image", Required: true}},
+		},
+		Difficulty: "intermediate",
+	}
+	m.openForm(command)
+	m.form.argumentRows[0][0] = "ubuntu"
+	m.formCommand = &command
+	m.currentView = viewForm
+	result := commands.Build([]string{"wslc", "run"}, m.form.commandSchema, m.form.argumentRows, m.form.optionValues())
+	confirmed, _ := m.executeOrConfirm(result.Display, command.Difficulty, result.Args)
+	m = confirmed.(model)
+
+	updated, _ := m.handleConfirmationKey(tea.KeyMsg{Type: tea.KeyEsc})
+	got := updated.(model)
+	if got.currentView != viewForm {
+		t.Fatalf("expected guided form after cancellation, got %v", got.currentView)
+	}
+	if got.form == nil || got.formCommand == nil {
+		t.Fatal("guided form state was discarded on confirmation cancellation")
 	}
 }
 

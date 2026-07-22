@@ -1,6 +1,9 @@
 package data
 
-import "wslc-tui-ms/internal/commands"
+import (
+	"strings"
+	"wslc-tui-ms/internal/commands"
+)
 
 var AllCommands = map[string][]commands.Command{
 	"Container": {
@@ -912,5 +915,94 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 		"Registry/login":  {Arguments: []commands.Argument{a("server", false, false)}, Options: []commands.Option{t("--username"), t("--password"), b("--password-stdin")}},
 		"Registry/logout": {Arguments: []commands.Argument{a("server", false, false)}},
 	}
-	return schemas[key]
+	schema := schemas[key]
+	if schema == nil {
+		return nil
+	}
+	return enrichCatalogSchema(schema, legacyCommand(category, name))
+}
+
+func legacyCommand(category, name string) commands.Command {
+	for _, command := range AllCommands[category] {
+		if command.Name == name {
+			return command
+		}
+	}
+	return commands.Command{}
+}
+
+func enrichCatalogSchema(schema *commands.CommandSchema, command commands.Command) *commands.CommandSchema {
+	placeholderNames := positionalPlaceholders(command, schema)
+	for index := range schema.Arguments {
+		argument := &schema.Arguments[index]
+		if argument.Label == "" {
+			argument.Label = titleLabel(argument.Name)
+		}
+		if argument.Placeholder == "" {
+			argument.Placeholder = argument.Name
+			if index < len(placeholderNames) {
+				argument.Placeholder = placeholderNames[index]
+			}
+		}
+	}
+	for index := range schema.Options {
+		option := &schema.Options[index]
+		if option.Description == "" {
+			for _, flag := range command.Flags {
+				if flag.Long == option.Flag {
+					option.Description = flag.Description
+					break
+				}
+			}
+		}
+		if option.Description == "" {
+			option.Description = titleLabel(strings.TrimLeft(option.Flag, "-"))
+		}
+	}
+	return schema
+}
+
+func titleLabel(value string) string {
+	value = strings.ReplaceAll(strings.TrimSpace(value), "-", " ")
+	if value == "" {
+		return "Value"
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
+}
+
+func positionalPlaceholders(command commands.Command, schema *commands.CommandSchema) []string {
+	if len(schema.Arguments) == 0 {
+		return nil
+	}
+	optionKinds := make(map[string]commands.OptionKind, len(schema.Options))
+	for _, option := range schema.Options {
+		optionKinds[option.Flag] = option.Kind
+	}
+	for _, flag := range command.Flags {
+		for _, name := range []string{flag.Short, flag.Long} {
+			if name == "" {
+				continue
+			}
+			for option, kind := range optionKinds {
+				if option == flag.Long {
+					optionKinds[name] = kind
+				}
+			}
+		}
+	}
+	fields := strings.Fields(command.Full)
+	var placeholders []string
+	for index := 0; index < len(fields); index++ {
+		field := fields[index]
+		if kind, ok := optionKinds[field]; ok {
+			if kind != commands.OptionKindBoolean && index+1 < len(fields) {
+				index++
+			}
+			continue
+		}
+		if strings.HasPrefix(field, "{") && strings.HasSuffix(field, "}") {
+			placeholders = append(placeholders, strings.Trim(field, "{}"))
+		}
+	}
+	return placeholders
 }

@@ -176,6 +176,83 @@ func TestCatalogSchemasHaveUniqueOrderedArguments(t *testing.T) {
 	}
 }
 
+func TestCatalogSchemasHaveDisplayMetadata(t *testing.T) {
+	for _, command := range GetAllCommands() {
+		if command.Schema == nil {
+			continue
+		}
+		for _, argument := range command.Schema.Arguments {
+			if strings.TrimSpace(argument.Label) == "" || strings.TrimSpace(argument.Placeholder) == "" {
+				t.Errorf("%s argument %q lacks display metadata: %#v", command.Full, argument.Name, argument)
+			}
+		}
+		for _, option := range command.Schema.Options {
+			if strings.TrimSpace(option.Flag) == "" || strings.TrimSpace(option.Description) == "" {
+				t.Errorf("%s option lacks display metadata: %#v", command.Full, option)
+			}
+		}
+	}
+}
+
+func TestCatalogSchemaDefaultsPreserveLegacyCommands(t *testing.T) {
+	for _, command := range GetAllCommands() {
+		t.Run(command.Category+"/"+command.Name, func(t *testing.T) {
+			if exception, ok := catalogMigrationExceptions[command.Category+"/"+command.Name]; ok {
+				t.Skip(exception)
+			}
+			values := make(map[string]string)
+			for _, placeholder := range commands.ExtractPlaceholders(command.Full) {
+				values[placeholder] = "value-" + placeholder
+			}
+			expected := commands.ParseCommand(commands.SubstitutePlaceholders(command.Full, values))
+			var rows [][]string
+			for _, argument := range command.Schema.Arguments {
+				value := values[argument.Placeholder]
+				if value != "" {
+					rows = append(rows, []string{value})
+				}
+			}
+			result := commands.Build(legacyBase(command), *command.Schema, rows, nil)
+			if len(result.Errors) != 0 {
+				t.Fatalf("Build returned errors: %v", result.Errors)
+			}
+			if !reflect.DeepEqual(result.Args, expected) {
+				t.Fatalf("schema args = %#v, legacy Full = %#v", result.Args, expected)
+			}
+		})
+	}
+}
+
+func legacyBase(command commands.Command) []string {
+	fields := strings.Fields(command.Full)
+	for index, field := range fields {
+		if strings.HasPrefix(field, "-") || strings.HasPrefix(field, "{") {
+			return fields[:index]
+		}
+	}
+	return fields
+}
+
+// These entries intentionally use legacy examples or aliases that are not a
+// one-to-one representation of the schema's canonical invocation.
+var catalogMigrationExceptions = map[string]string{
+	"Container/ls":     "legacy Full selects JSON and --all; schema defaults are table and no --all",
+	"Container/run":    "legacy Full is an example with -d and --name values not represented by defaults",
+	"Container/create": "legacy Full is an example with a --name value not represented by defaults",
+	"Container/exec":   "legacy Full supplies literal bash for the required repeatable command",
+	"Container/stop":   "legacy Full omits the schema's default --time value",
+	"Container/kill":   "legacy Full omits the schema's default --signal value",
+	"Container/export": "legacy Full supplies an -o value while the schema has no output default",
+	"Image/ls":         "legacy Full selects JSON while the schema defaults to table",
+	"Image/save":       "legacy Full supplies an -o value while the schema has no output default",
+	"Image/load":       "legacy Full supplies an -i value while the schema has no input default",
+	"Image/build":      "legacy Full supplies a tag and literal path while the schema has no tag default",
+	"Network/ls":       "legacy Full selects JSON while the schema defaults to table",
+	"Network/create":   "legacy Full omits the schema's default bridge driver",
+	"Volume/ls":        "legacy Full selects JSON while the schema defaults to table",
+	"Session/run":      "legacy Full supplies only the session while the schema requires a command",
+}
+
 func TestCatalogRepresentativeCommandGeneration(t *testing.T) {
 	tests := []struct {
 		name    string
