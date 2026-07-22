@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -99,5 +100,59 @@ func TestFormEnterBlocksInvalidValuesLocally(t *testing.T) {
 	}
 	if !strings.Contains(stripAnsiTest(got.View()), "argument \"image\"") {
 		t.Fatalf("validation error was not rendered locally: %q", stripAnsiTest(got.View()))
+	}
+}
+
+func TestFormRegistersAndHandlesFieldClickRegions(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.openForm(testFormCommand())
+	m.View()
+
+	for _, field := range []int{0, 1, 2, 4} {
+		if _, ok := regionForAction(m, "form:"+strconv.Itoa(field)); !ok {
+			t.Fatalf("form field %d has no clickable region", field)
+		}
+	}
+	updated, _ := m.handleRegionClick("form:2")
+	got := updated.(model)
+	if got.form.focusedField != 2 {
+		t.Fatalf("clicked field focus = %d, want 2", got.form.focusedField)
+	}
+
+	m.form.focusedField = 0
+	r, _ := regionForAction(m, "form:4")
+	updated, _ = m.handleMouse(tea.MouseMsg{Type: tea.MouseLeft, X: r.x1, Y: r.y1})
+	got = updated.(model)
+	if got.form.focusedField != 4 {
+		t.Fatalf("mouse click focus = %d, want 4", got.form.focusedField)
+	}
+}
+
+func TestFormNavigationKeepsFocusedFieldVisible(t *testing.T) {
+	m := NewModelForTest(80, 12)
+	m.openForm(testFormCommand())
+	m.formViewport.Width = 76
+	m.formViewport.Height = 3
+	m.View()
+	if m.formViewport.TotalLineCount() <= m.formViewport.Height {
+		t.Fatalf("form content did not overflow viewport: %d lines, height %d", m.formViewport.TotalLineCount(), m.formViewport.Height)
+	}
+
+	for i := 0; i < m.form.fieldCount()-1; i++ {
+		updated, _ := m.handleFormKey(formKey(tea.KeyDown))
+		m = updated.(model)
+	}
+	if m.form.focusedField != m.form.fieldCount()-1 {
+		t.Fatalf("focused field = %d, want final field", m.form.focusedField)
+	}
+	if m.formViewport.YOffset == 0 {
+		t.Fatal("viewport did not scroll to keep final field visible")
+	}
+
+	updated, _ := m.handleFormKey(formKey(tea.KeyUp))
+	got := updated.(model)
+	line := got.formFieldLines[got.form.focusedField]
+	if line < got.formViewport.YOffset || line >= got.formViewport.YOffset+got.formViewport.Height {
+		t.Fatalf("focused line %d is outside viewport [%d,%d)", line, got.formViewport.YOffset, got.formViewport.YOffset+got.formViewport.Height)
 	}
 }

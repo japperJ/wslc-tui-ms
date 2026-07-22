@@ -86,10 +86,11 @@ type model struct {
 	learnContent      string
 
 	// Components
-	textInput    textinput.Model
-	viewport     viewport.Model
-	formInput    textinput.Model
-	formViewport viewport.Model
+	textInput      textinput.Model
+	viewport       viewport.Model
+	formInput      textinput.Model
+	formViewport   *viewport.Model
+	formFieldLines map[int]int
 
 	// Status
 	lastCopied     string
@@ -147,17 +148,18 @@ func NewModel() model {
 	}
 
 	m := model{
-		currentView:   viewCommands,
-		inputFocused:  true,
-		categories:    categories,
-		allCommands:   allCmds,
-		filteredCmds:  initialCmds,
-		textInput:     ti,
-		viewport:      vp,
-		formInput:     formInput,
-		formViewport:  formViewport,
-		phInput:       phi,
-		phActiveIndex: -1,
+		currentView:    viewCommands,
+		inputFocused:   true,
+		categories:     categories,
+		allCommands:    allCmds,
+		filteredCmds:   initialCmds,
+		textInput:      ti,
+		viewport:       vp,
+		formInput:      formInput,
+		formViewport:   &formViewport,
+		formFieldLines: make(map[int]int),
+		phInput:        phi,
+		phActiveIndex:  -1,
 		learnTopics: []string{
 			"Getting Started",
 			"Container Operations",
@@ -426,10 +428,11 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.MouseWheelUp:
 			m.formViewport.ScrollUp(3)
+			return m, nil
 		case tea.MouseWheelDown:
 			m.formViewport.ScrollDown(3)
+			return m, nil
 		}
-		return m, nil
 	}
 
 	// Only react to an actual left-button click, never to mouse motion/drag.
@@ -490,6 +493,12 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
+	if strings.HasPrefix(action, "form:") {
+		if index, err := strconv.Atoi(strings.TrimPrefix(action, "form:")); err == nil {
+			m.focusFormField(index)
+		}
+		return m, nil
+	}
 	// Placeholder value rows: "ph:<index>"
 	if strings.HasPrefix(action, "ph:") {
 		if idx, err := strconv.Atoi(strings.TrimPrefix(action, "ph:")); err == nil {
@@ -753,6 +762,30 @@ func (m *model) syncFormInput() {
 	}
 }
 
+func (m *model) ensureFormFieldVisible() {
+	if m.form == nil || m.formViewport == nil {
+		return
+	}
+	line, ok := m.formFieldLines[m.form.focusedField]
+	if !ok || m.formViewport.Height < 1 {
+		return
+	}
+	if line < m.formViewport.YOffset {
+		m.formViewport.SetYOffset(line)
+	} else if line >= m.formViewport.YOffset+m.formViewport.Height {
+		m.formViewport.SetYOffset(line - m.formViewport.Height + 1)
+	}
+}
+
+func (m *model) focusFormField(index int) {
+	if m.form == nil || index < 0 || index >= m.form.fieldCount() {
+		return
+	}
+	m.form.focusedField = index
+	m.syncFormInput()
+	m.ensureFormFieldVisible()
+}
+
 func (m *model) formBuild() commands.BuildResult {
 	if m.form == nil || m.formCommand == nil {
 		return commands.BuildResult{}
@@ -774,9 +807,11 @@ func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab", "down":
 		m.form.moveFocus(1)
 		m.syncFormInput()
+		m.ensureFormFieldVisible()
 	case "shift+tab", "up":
 		m.form.moveFocus(-1)
 		m.syncFormInput()
+		m.ensureFormFieldVisible()
 	case "left", "right", " ":
 		index := m.form.focusedField - len(m.form.argumentRows)
 		if index >= 0 && index < len(m.form.options) {
@@ -1542,11 +1577,29 @@ func (m model) renderFormView() string {
 	if m.formViewport.Height < 1 {
 		m.formViewport.Height = 1
 	}
+	if m.formFieldLines == nil {
+		m.formFieldLines = make(map[int]int)
+	}
+	for field := range m.formFieldLines {
+		delete(m.formFieldLines, field)
+	}
+	registerField := func(field, line int) {
+		m.formFieldLines[field] = line
+		terminalRow := 6 + line - m.formViewport.YOffset
+		if terminalRow >= 6 && terminalRow < 6+m.formViewport.Height && m.clickRegions != nil {
+			*m.clickRegions = append(*m.clickRegions, clickRegion{
+				x1: 1, x2: m.width - 2,
+				y1: terminalRow, y2: terminalRow,
+				action: "form:" + strconv.Itoa(field),
+			})
+		}
+	}
 	lines := []string{
 		ui.SectionLabelStyle.Render("  ARGUMENTS"),
 	}
 	for i, argument := range m.form.commandSchema.Arguments {
 		for row := i; row < len(m.form.argumentRows) && (argument.Repeatable || row == i); row++ {
+			line := len(lines)
 			value := ""
 			if len(m.form.argumentRows[row]) == 1 {
 				value = m.form.argumentRows[row][0]
@@ -1563,6 +1616,7 @@ func (m model) renderFormView() string {
 				marker = ui.CmdCursorStyle.Render("▸ ")
 			}
 			lines = append(lines, marker+ui.PlaceholderLabelStyle.Render(argument.Name)+"  "+field)
+			registerField(row, line)
 			if !argument.Repeatable {
 				break
 			}
@@ -1577,6 +1631,7 @@ func (m model) renderFormView() string {
 	lines = append(lines, "", ui.SectionLabelStyle.Render("  OPTIONS"))
 	for i, option := range m.form.options {
 		fieldIndex := len(m.form.argumentRows) + i
+		line := len(lines)
 		value := option.value
 		switch option.kind {
 		case commands.OptionKindBoolean:
@@ -1596,6 +1651,7 @@ func (m model) renderFormView() string {
 			marker = ui.CmdCursorStyle.Render("▸ ")
 		}
 		lines = append(lines, marker+ui.PreviewFlagStyle.Render(option.flag)+"  "+value)
+		registerField(fieldIndex, line)
 	}
 	lines = append(lines, "", ui.SectionLabelStyle.Render("  GENERATED COMMAND"), "  "+ui.PreviewCmdStyle.Render("$ "+result.Display))
 	if m.form.validationError != nil {
