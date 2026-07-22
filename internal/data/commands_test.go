@@ -108,25 +108,23 @@ func TestGPUFlagOnRun(t *testing.T) {
 	t.Error("Container run command not found")
 }
 
-func TestStatsUsesMicrosoftWSLCFlags(t *testing.T) {
-	for _, cmd := range GetCommandsByCategory("Container") {
-		if cmd.Name != "stats" {
-			continue
-		}
-
-		if cmd.Full != "wslc stats --format table" {
-			t.Errorf("stats command has incorrect invocation: %q", cmd.Full)
-		}
-
-		for _, flag := range cmd.Flags {
-			if flag.Long == "--no-stream" {
-				t.Error("stats command contains unsupported --no-stream flag")
-			}
-		}
-		return
+func TestStatsSchemaUsesSupportedOptions(t *testing.T) {
+	stats := catalogCommand(t, "Container", "stats")
+	if stats.Schema == nil {
+		t.Fatal("stats command has no schema")
 	}
 
-	t.Fatal("stats command not found")
+	if len(stats.Schema.Arguments) != 1 || !stats.Schema.Arguments[0].Repeatable || stats.Schema.Arguments[0].Required {
+		t.Fatalf("stats should accept zero or more containers: %#v", stats.Schema.Arguments)
+	}
+	if got := stats.Schema.Options[0]; got.Flag != "--format" || got.Kind != commands.OptionKindSelect || !reflect.DeepEqual(got.Choices, []string{"table", "json"}) {
+		t.Fatalf("stats format option = %#v", got)
+	}
+	for _, option := range stats.Schema.Options {
+		if option.Flag == "--no-stream" {
+			t.Fatal("stats schema contains unsupported --no-stream option")
+		}
+	}
 }
 
 func TestReadOnlyCommandsAreBeginner(t *testing.T) {
@@ -262,6 +260,60 @@ func TestStatsFormatRejectsUnsupportedValues(t *testing.T) {
 	)
 	if !containsCommandError(result.Errors, `option "--format" has invalid value "wide"`) {
 		t.Fatalf("stats accepted unsupported format: %v", result.Errors)
+	}
+}
+
+func TestStatsBuildsAllAcceptedFormatsAndFlags(t *testing.T) {
+	command := catalogCommand(t, "Container", "stats")
+	for _, format := range []string{"table", "json"} {
+		result := commands.Build(
+			[]string{"wslc", "stats"},
+			*command.Schema,
+			[][]string{{"web"}, {"worker"}},
+			map[string]string{"--format": format, "--all": "true", "--no-trunc": "true"},
+		)
+		if len(result.Errors) != 0 {
+			t.Fatalf("format %q returned errors: %v", format, result.Errors)
+		}
+		want := []string{"wslc", "stats", "web", "worker", "--format", format, "--all", "--no-trunc"}
+		if !reflect.DeepEqual(result.Args, want) {
+			t.Errorf("format %q Args = %#v, want %#v", format, result.Args, want)
+		}
+	}
+}
+
+func TestStatsBuildsWithZeroContainerRows(t *testing.T) {
+	command := catalogCommand(t, "Container", "stats")
+	result := commands.Build([]string{"wslc", "stats"}, *command.Schema, nil, nil)
+	if len(result.Errors) != 0 {
+		t.Fatalf("zero rows returned errors: %v", result.Errors)
+	}
+	if want := []string{"wslc", "stats", "--format", "table"}; !reflect.DeepEqual(result.Args, want) {
+		t.Fatalf("zero rows Args = %#v, want %#v", result.Args, want)
+	}
+}
+
+func TestVariableLengthStopAndRemoveBuildAllRows(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		category string
+		command  string
+		base     []string
+		want     []string
+	}{
+		{name: "stop", category: "Container", command: "stop", base: []string{"wslc", "stop"}, want: []string{"wslc", "stop", "one", "two", "--time", "10"}},
+		{name: "remove", category: "Container", command: "rm", base: []string{"wslc", "remove"}, want: []string{"wslc", "remove", "one", "two"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			command := catalogCommand(t, test.category, test.command)
+			result := commands.Build(test.base, *command.Schema, [][]string{{"one"}, {"two"}}, nil)
+			if len(result.Errors) != 0 {
+				t.Fatalf("Build returned errors: %v", result.Errors)
+			}
+			if !reflect.DeepEqual(result.Args, test.want) {
+				t.Errorf("Args = %#v, want %#v", result.Args, test.want)
+			}
+		})
 	}
 }
 

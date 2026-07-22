@@ -1,12 +1,14 @@
 package app
 
 import (
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"wslc-tui-ms/internal/commands"
+	"wslc-tui-ms/internal/data"
 )
 
 func formKey(key tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: key} }
@@ -25,6 +27,17 @@ func TestKnownCommandSelectionOpensGuidedForm(t *testing.T) {
 	if got.form == nil {
 		t.Fatal("known command did not initialize form state")
 	}
+}
+
+func catalogCommandForApp(t *testing.T, category, name string) commands.Command {
+	t.Helper()
+	for _, command := range data.GetCommandsByCategory(category) {
+		if command.Name == name {
+			return command
+		}
+	}
+	t.Fatalf("catalog command %s/%s not found", category, name)
+	return commands.Command{}
 }
 
 func TestFormViewRendersSectionsAndStatsDefault(t *testing.T) {
@@ -47,6 +60,84 @@ func TestFormViewRendersSectionsAndStatsDefault(t *testing.T) {
 	}
 	if !strings.Contains(view, "[ ]") {
 		t.Error("boolean option was not rendered as an unchecked checkbox")
+	}
+}
+
+func TestCatalogFormsOpenAndBuildAcceptanceCommands(t *testing.T) {
+	tests := []struct {
+		name        string
+		category    string
+		command     string
+		values      [][]string
+		options     map[string]string
+		wantView    view
+		wantDisplay string
+		wantArgs    []string
+	}{
+		{
+			name:     "stats defaults",
+			category: "Container", command: "stats",
+			wantView:    viewForm,
+			wantDisplay: "wslc stats --format table",
+			wantArgs:    []string{"wslc", "stats", "--format", "table"},
+		},
+		{
+			name:     "tag source and target",
+			category: "Image", command: "tag",
+			values:      [][]string{{"source:latest"}, {"target:v1"}},
+			wantView:    viewForm,
+			wantDisplay: "wslc tag source:latest target:v1",
+			wantArgs:    []string{"wslc", "tag", "source:latest", "target:v1"},
+		},
+		{
+			name:     "network connect",
+			category: "Network", command: "connect",
+			values:      [][]string{{"frontend"}, {"web"}},
+			wantView:    viewForm,
+			wantDisplay: "wslc network connect frontend web",
+			wantArgs:    []string{"wslc", "network", "connect", "frontend", "web"},
+		},
+		{
+			name:     "run image and command",
+			category: "Container", command: "run",
+			values:      [][]string{{"ubuntu:latest"}, {"echo"}, {"hello"}},
+			options:     map[string]string{"--detach": "true", "--name": "worker"},
+			wantView:    viewForm,
+			wantDisplay: "wslc run ubuntu:latest echo hello --detach --name worker",
+			wantArgs:    []string{"wslc", "run", "ubuntu:latest", "echo", "hello", "--detach", "--name", "worker"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := NewModelForTest(120, 30)
+			command := catalogCommandForApp(t, test.category, test.command)
+			m.enterPreview(command)
+			if m.currentView != test.wantView {
+				t.Fatalf("opened view = %v, want form", m.currentView)
+			}
+			for len(m.form.argumentRows) < len(test.values) {
+				if !m.form.addRepeatableRow() {
+					t.Fatal("could not add repeatable argument row")
+				}
+			}
+			for index, row := range test.values {
+				m.form.argumentRows[index] = row
+			}
+			for flag, value := range test.options {
+				m.form.setOption(flag, value)
+			}
+			result := m.formBuild()
+			if len(result.Errors) != 0 {
+				t.Fatalf("form build returned errors: %v", result.Errors)
+			}
+			if result.Display != test.wantDisplay {
+				t.Errorf("Display = %q, want %q", result.Display, test.wantDisplay)
+			}
+			if !reflect.DeepEqual(result.Args, test.wantArgs) {
+				t.Errorf("Args = %#v, want %#v", result.Args, test.wantArgs)
+			}
+		})
 	}
 }
 

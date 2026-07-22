@@ -30,20 +30,26 @@ func Build(command []string, schema CommandSchema, argumentRows [][]string, opti
 			if argumentIndex != len(schema.Arguments)-1 {
 				result.Errors = append(result.Errors, fmt.Errorf("repeatable argument %q must be final", argument.Name))
 			}
-			startRow := rowIndex
+			validRows := 0
+			hadRowError := false
 			for ; rowIndex < len(argumentRows); rowIndex++ {
 				value, ok := positionalValue(argumentRows[rowIndex])
 				if !ok {
+					if len(argumentRows[rowIndex]) == 1 && argumentRows[rowIndex][0] == "" {
+						continue
+					}
 					result.Errors = append(result.Errors, fmt.Errorf("argument %q has an incomplete row", argument.Name))
+					hadRowError = true
 					continue
 				}
+				validRows++
 				validationErrors := appendValidationErrors(nil, argument.Name, value, argument.Validation)
 				result.Errors = append(result.Errors, validationErrors...)
 				if len(validationErrors) == 0 {
 					result.Args = append(result.Args, value)
 				}
 			}
-			if argument.Required && rowIndex == startRow {
+			if argument.Required && validRows == 0 && !hadRowError {
 				result.Errors = append(result.Errors, fmt.Errorf("required argument %q is missing", argument.Name))
 			}
 			continue

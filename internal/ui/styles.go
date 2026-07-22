@@ -27,8 +27,8 @@ var (
 			BorderForeground(ColorBorder)
 
 	CardActiveStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(ColorBlue)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorBlue)
 
 	CardDimStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -127,16 +127,16 @@ var (
 			Bold(true)
 
 	PreviewFlagStyle = lipgloss.NewStyle().
-			Foreground(ColorCyan)
+				Foreground(ColorCyan)
 
 	PreviewDescStyle = lipgloss.NewStyle().
-			Foreground(ColorText)
+				Foreground(ColorText)
 
 	PreviewExampleStyle = lipgloss.NewStyle().
-			Foreground(ColorYellow)
+				Foreground(ColorYellow)
 
 	PreviewDefaultStyle = lipgloss.NewStyle().
-			Foreground(ColorTextDim)
+				Foreground(ColorTextDim)
 
 	// Placeholder editing styles
 	PlaceholderEmptyStyle = lipgloss.NewStyle().
