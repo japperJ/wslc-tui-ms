@@ -3,9 +3,39 @@ package app
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"wslc-tui-ms/internal/commands"
 )
+
+func TestCanceledExecutionIgnoresLateCompletion(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.currentView = viewOutput
+	m.running = true
+	m.executionID = 7
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	canceled := updated.(model)
+	if canceled.currentView != viewCommands {
+		t.Fatalf("canceled view = %v, want commands", canceled.currentView)
+	}
+	if canceled.executionID == 7 {
+		t.Fatal("cancel did not invalidate the active execution generation")
+	}
+
+	updated, _ = canceled.Update(execDoneMsg{
+		id: 7,
+		result: commands.ExecutionResult{
+			Output:   "late output",
+			Duration: time.Second,
+		},
+	})
+	got := updated.(model)
+	if got.outputResult != nil {
+		t.Fatalf("late completion populated output: %#v", got.outputResult)
+	}
+}
 
 func TestValidFormExecutesBuilderArgsAndKeepsDisplay(t *testing.T) {
 	m := NewModelForTest(120, 30)

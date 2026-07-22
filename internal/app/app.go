@@ -222,6 +222,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cancelFn()
 					m.cancelFn = nil
 				}
+				m.executionID++
 				m.running = false
 				m.currentView = viewCommands
 				m.outputResult = nil
@@ -538,6 +539,7 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 				m.cancelFn()
 				m.cancelFn = nil
 			}
+			m.executionID++
 			m.running = false
 			m.currentView = viewCommands
 			m.outputResult = nil
