@@ -828,3 +828,89 @@ func GetAllCommands() []commands.Command {
 	}
 	return all
 }
+
+func init() {
+	for category, catalog := range AllCommands {
+		for index := range catalog {
+			AllCommands[category][index].Schema = catalogSchema(category, catalog[index].Name)
+		}
+	}
+}
+
+func catalogSchema(category, name string) *commands.CommandSchema {
+	key := category + "/" + name
+	b := func(flag string) commands.Option {
+		return commands.Option{Flag: flag, Kind: commands.OptionKindBoolean}
+	}
+	t := func(flag string) commands.Option {
+		return commands.Option{Flag: flag, Kind: commands.OptionKindText}
+	}
+	td := func(flag, defaultValue string) commands.Option {
+		return commands.Option{Flag: flag, Kind: commands.OptionKindText, Default: defaultValue}
+	}
+	s := func(flag string, choices ...string) commands.Option {
+		return commands.Option{Flag: flag, Kind: commands.OptionKindSelect, Default: "table", Choices: choices}
+	}
+	n := func(flag, defaultValue string) commands.Option {
+		return commands.Option{Flag: flag, Kind: commands.OptionKindNumeric, Default: defaultValue}
+	}
+	a := func(name string, required, repeatable bool) commands.Argument {
+		return commands.Argument{Name: name, Required: required, Repeatable: repeatable}
+	}
+
+	schemas := map[string]*commands.CommandSchema{
+		"Container/ls":      {Options: []commands.Option{b("--all"), s("--format", "table", "json"), t("--filter"), b("--no-trunc")}},
+		"Container/run":     {Arguments: []commands.Argument{a("image", true, false), a("command", false, true)}, Options: []commands.Option{b("--detach"), b("--interactive"), b("--tty"), t("--name"), t("--publish"), t("--volume"), t("--env"), b("--rm"), t("--network"), t("--workdir"), t("--cpus"), t("--memory"), t("--ulimit"), t("--shm-size"), t("--stop-signal"), t("--gpus")}},
+		"Container/create":  {Arguments: []commands.Argument{a("image", true, false), a("command", false, true)}, Options: []commands.Option{t("--name"), t("--publish"), t("--volume"), t("--env"), t("--network"), t("--workdir"), t("--cpus"), t("--memory"), t("--gpus")}},
+		"Container/exec":    {Arguments: []commands.Argument{a("container", true, false), a("command", true, true)}, Options: []commands.Option{b("--detach"), t("--env"), b("--interactive"), b("--privileged"), b("--tty"), t("--user"), t("--workdir")}},
+		"Container/logs":    {Arguments: []commands.Argument{a("container", true, false)}, Options: []commands.Option{b("--follow"), t("--tail"), t("--since"), b("--timestamps"), t("--tail-n")}},
+		"Container/start":   {Arguments: []commands.Argument{a("containers", true, true)}, Options: []commands.Option{b("--attach"), b("--interactive")}},
+		"Container/stop":    {Arguments: []commands.Argument{a("containers", true, true)}, Options: []commands.Option{n("--time", "10")}},
+		"Container/kill":    {Arguments: []commands.Argument{a("containers", true, true)}, Options: []commands.Option{td("--signal", "KILL")}},
+		"Container/rm":      {Arguments: []commands.Argument{a("containers", true, true)}, Options: []commands.Option{b("--force")}},
+		"Container/inspect": {Arguments: []commands.Argument{a("containers", true, true)}, Options: []commands.Option{t("--format")}},
+		"Container/stats":   {Arguments: []commands.Argument{a("containers", false, true)}, Options: []commands.Option{s("--format", "table", "json"), b("--all"), b("--no-trunc")}},
+		"Container/attach":  {Arguments: []commands.Argument{a("container", true, false)}, Options: []commands.Option{t("--detach-keys"), b("--no-stdin")}},
+		"Container/export":  {Arguments: []commands.Argument{a("container", true, false)}, Options: []commands.Option{t("--output")}},
+		"Container/prune":   {Options: []commands.Option{b("--force")}},
+
+		"Image/ls":      {Options: []commands.Option{b("--all"), s("--format", "table", "json"), t("--filter"), b("--no-trunc")}},
+		"Image/pull":    {Arguments: []commands.Argument{a("image", true, false)}, Options: []commands.Option{t("--platform")}},
+		"Image/push":    {Arguments: []commands.Argument{a("image", true, false)}},
+		"Image/tag":     {Arguments: []commands.Argument{a("source", true, false), a("target", true, false)}},
+		"Image/rm":      {Arguments: []commands.Argument{a("images", true, true)}, Options: []commands.Option{b("--force")}},
+		"Image/inspect": {Arguments: []commands.Argument{a("images", true, true)}, Options: []commands.Option{t("--format")}},
+		"Image/prune":   {Options: []commands.Option{b("--force")}},
+		"Image/save":    {Arguments: []commands.Argument{a("images", true, true)}, Options: []commands.Option{t("--output")}},
+		"Image/load":    {Options: []commands.Option{t("--input")}},
+		"Image/build":   {Arguments: []commands.Argument{a("path", true, false)}, Options: []commands.Option{t("--tag"), t("--file"), b("--no-cache"), b("--pull"), t("--label")}},
+		"Image/import":  {Arguments: []commands.Argument{a("file", true, false), a("image", false, false)}, Options: []commands.Option{t("--message"), t("--platform")}},
+
+		"Network/ls":         {Options: []commands.Option{s("--format", "table", "json"), t("--filter")}},
+		"Network/create":     {Arguments: []commands.Argument{a("network", true, false)}, Options: []commands.Option{td("--driver", "bridge"), t("--subnet"), t("--gateway"), b("--internal")}},
+		"Network/rm":         {Arguments: []commands.Argument{a("networks", true, true)}},
+		"Network/inspect":    {Arguments: []commands.Argument{a("networks", true, true)}, Options: []commands.Option{t("--format")}},
+		"Network/connect":    {Arguments: []commands.Argument{a("network", true, false), a("container", true, false)}, Options: []commands.Option{t("--alias"), t("--ip"), t("--link")}},
+		"Network/disconnect": {Arguments: []commands.Argument{a("network", true, false), a("container", true, false)}, Options: []commands.Option{b("--force")}},
+		"Network/prune":      {Options: []commands.Option{b("--force")}},
+
+		"Volume/ls":      {Options: []commands.Option{s("--format", "table", "json"), t("--filter")}},
+		"Volume/create":  {Arguments: []commands.Argument{a("volume", false, false)}, Options: []commands.Option{t("--label"), t("--driver")}},
+		"Volume/rm":      {Arguments: []commands.Argument{a("volumes", true, true)}, Options: []commands.Option{b("--force")}},
+		"Volume/inspect": {Arguments: []commands.Argument{a("volumes", true, true)}, Options: []commands.Option{t("--format")}},
+		"Volume/prune":   {Options: []commands.Option{b("--force")}},
+
+		"Session/ls":        {Options: []commands.Option{t("--format")}},
+		"Session/enter":     {Arguments: []commands.Argument{a("session", true, false)}},
+		"Session/run":       {Arguments: []commands.Argument{a("session", true, false), a("command", true, true)}, Options: []commands.Option{t("--cpus"), t("--memory"), t("--storage")}},
+		"Session/shell":     {Arguments: []commands.Argument{a("session", true, false)}, Options: []commands.Option{t("--cpus"), t("--memory")}},
+		"Session/terminate": {Arguments: []commands.Argument{a("session", true, false)}},
+
+		"System/info":     {},
+		"System/prune":    {Options: []commands.Option{b("--force"), b("--volumes")}},
+		"System/version":  {},
+		"Registry/login":  {Arguments: []commands.Argument{a("server", false, false)}, Options: []commands.Option{t("--username"), t("--password"), b("--password-stdin")}},
+		"Registry/logout": {Arguments: []commands.Argument{a("server", false, false)}},
+	}
+	return schemas[key]
+}
