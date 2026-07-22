@@ -26,6 +26,7 @@ type view int
 const (
 	viewCommands view = iota
 	viewPreview
+	viewForm
 	viewConfirm
 	viewOutput
 	viewLearn
@@ -54,7 +55,9 @@ type model struct {
 
 	// Command form state and values remembered for this app session.
 	form             *formState
+	formCommand      *commands.Command
 	formOptionMemory map[string]map[string]string
+	pendingForm      *commands.BuildResult
 
 	// Placeholder editing (in preview)
 	placeholders  []string
@@ -83,8 +86,10 @@ type model struct {
 	learnContent      string
 
 	// Components
-	textInput textinput.Model
-	viewport  viewport.Model
+	textInput    textinput.Model
+	viewport     viewport.Model
+	formInput    textinput.Model
+	formViewport viewport.Model
 
 	// Status
 	lastCopied     string
@@ -128,6 +133,10 @@ func NewModel() model {
 	phi.Width = 40
 
 	vp := viewport.New(0, 0)
+	formInput := textinput.New()
+	formInput.CharLimit = 200
+	formInput.Width = 36
+	formViewport := viewport.New(0, 0)
 
 	categories := data.GetCategories()
 	allCmds := data.AllCommands
@@ -145,6 +154,8 @@ func NewModel() model {
 		filteredCmds:  initialCmds,
 		textInput:     ti,
 		viewport:      vp,
+		formInput:     formInput,
+		formViewport:  formViewport,
 		phInput:       phi,
 		phActiveIndex: -1,
 		learnTopics: []string{
@@ -185,6 +196,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.viewport.Width = vpWidth
 		m.viewport.Height = vpHeight
+		m.formViewport.Width = vpWidth
+		m.formViewport.Height = vpHeight
 		return m, nil
 
 	case execDoneMsg:
@@ -384,6 +397,8 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleCommandsKey(msg)
 	case viewPreview:
 		return m.handlePreviewKey(msg)
+	case viewForm:
+		return m.handleFormKey(msg)
 	case viewConfirm:
 		return m.handleConfirmationKey(msg)
 	case viewOutput:
@@ -406,6 +421,15 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.viewport.ScrollDown(3)
 			return m, nil
 		}
+	}
+	if m.currentView == viewForm {
+		switch msg.Type {
+		case tea.MouseWheelUp:
+			m.formViewport.ScrollUp(3)
+		case tea.MouseWheelDown:
+			m.formViewport.ScrollDown(3)
+		}
+		return m, nil
 	}
 
 	// Only react to an actual left-button click, never to mouse motion/drag.
@@ -500,6 +524,10 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 		} else if m.currentView == viewPreview {
 			m.currentView = viewCommands
 			m.previewCmd = nil
+		} else if m.currentView == viewForm {
+			m.currentView = viewCommands
+			m.form = nil
+			m.formCommand = nil
 		} else if m.currentView == viewOutput {
 			m.currentView = viewCommands
 			m.outputResult = nil
@@ -522,6 +550,8 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 				}
 				return m.executeOrConfirm(m.substitutedCommand(), m.previewCmd.Difficulty)
 			}
+		} else if m.currentView == viewForm {
+			return m.handleFormKey(tea.KeyMsg{Type: tea.KeyEnter})
 		} else if m.inputFocused {
 			typed := strings.TrimSpace(m.inputValue)
 			if typed != "" && !m.isKnownCommand(typed) {
@@ -659,6 +689,10 @@ func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // enterPreview switches to the preview view for the given command and
 // initializes placeholder editing state.
 func (m *model) enterPreview(cmd commands.Command) {
+	if cmd.Schema != nil {
+		m.openForm(cmd)
+		return
+	}
 	m.previewCmd = &cmd
 	m.currentView = viewPreview
 	m.placeholders = commands.ExtractPlaceholders(cmd.Full)
@@ -667,6 +701,153 @@ func (m *model) enterPreview(cmd commands.Command) {
 	m.phWarn = false
 	m.phInput.Blur()
 	m.phInput.SetValue("")
+}
+
+func (m *model) openForm(command commands.Command) {
+	m.openCommandForm(command)
+	m.formCommand = &command
+	m.currentView = viewForm
+	m.formInput.Blur()
+	if m.form != nil && m.form.fieldCount() > 0 {
+		m.form.focusedField = 0
+		m.syncFormInput()
+	}
+	m.formViewport.GotoTop()
+}
+
+func formCommandBase(command string) []string {
+	fields := strings.Fields(command)
+	for i, field := range fields {
+		if strings.HasPrefix(field, "-") || strings.Contains(field, "{") {
+			return fields[:i]
+		}
+	}
+	return fields
+}
+
+func (m *model) syncFormInput() {
+	if m.form == nil {
+		return
+	}
+	index := m.form.focusedField
+	if index < len(m.form.argumentRows) {
+		value := ""
+		if len(m.form.argumentRows[index]) == 1 {
+			value = m.form.argumentRows[index][0]
+		}
+		m.formInput.SetValue(value)
+		m.formInput.Focus()
+		m.formInput.CursorEnd()
+		return
+	}
+	optionIndex := index - len(m.form.argumentRows)
+	if optionIndex >= 0 && optionIndex < len(m.form.options) {
+		option := m.form.options[optionIndex]
+		if option.kind == commands.OptionKindText || option.kind == commands.OptionKindNumeric {
+			m.formInput.SetValue(option.value)
+			m.formInput.Focus()
+			m.formInput.CursorEnd()
+		} else {
+			m.formInput.Blur()
+		}
+	}
+}
+
+func (m *model) formBuild() commands.BuildResult {
+	if m.form == nil || m.formCommand == nil {
+		return commands.BuildResult{}
+	}
+	result := commands.Build(formCommandBase(m.formCommand.Full), m.form.commandSchema, m.form.argumentRows, m.form.optionValues())
+	m.form.buildResult = result
+	return result
+}
+
+func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.form == nil {
+		return m, nil
+	}
+	switch msg.String() {
+	case "esc":
+		m.currentView = viewCommands
+		m.form = nil
+		return m, nil
+	case "tab", "down":
+		m.form.moveFocus(1)
+		m.syncFormInput()
+	case "shift+tab", "up":
+		m.form.moveFocus(-1)
+		m.syncFormInput()
+	case "left", "right", " ":
+		index := m.form.focusedField - len(m.form.argumentRows)
+		if index >= 0 && index < len(m.form.options) {
+			option := &m.form.options[index]
+			if option.kind == commands.OptionKindBoolean {
+				if option.value == "true" {
+					option.value = "false"
+				} else {
+					option.value = "true"
+				}
+			} else if option.kind == commands.OptionKindSelect && len(option.choices) > 0 {
+				choice := 0
+				for i, candidate := range option.choices {
+					if candidate == option.value {
+						choice = i
+					}
+				}
+				if msg.String() == "left" {
+					choice--
+				} else {
+					choice++
+				}
+				if choice < 0 {
+					choice = len(option.choices) - 1
+				}
+				if choice >= len(option.choices) {
+					choice = 0
+				}
+				option.value = option.choices[choice]
+			}
+		}
+	case "enter":
+		result := m.formBuild()
+		if len(result.Errors) > 0 {
+			m.form.validationError = result.Errors[0]
+			return m, nil
+		}
+		m.rememberFormOptions()
+		pending := result
+		m.pendingForm = &pending
+		return m, nil
+	case "+", "=":
+		if m.form.addRepeatableRow() {
+			m.form.focusedField = m.form.fieldCount() - 1
+			m.syncFormInput()
+		}
+		return m, nil
+	case "-":
+		argumentIndex := m.form.focusedField
+		if argumentIndex >= 0 && argumentIndex < len(m.form.argumentRows) && m.form.removeRepeatableRow(argumentIndex) {
+			m.syncFormInput()
+		}
+		return m, nil
+	default:
+		if m.formInput.Focused() {
+			var cmd tea.Cmd
+			m.formInput, cmd = m.formInput.Update(msg)
+			value := m.formInput.Value()
+			if m.form.focusedField < len(m.form.argumentRows) {
+				m.form.argumentRows[m.form.focusedField] = []string{value}
+			} else {
+				option := m.form.focusedField - len(m.form.argumentRows)
+				if option >= 0 && option < len(m.form.options) {
+					m.form.options[option].value = value
+				}
+			}
+			m.form.validationError = nil
+			return m, cmd
+		}
+	}
+	return m, nil
 }
 
 // focusPlaceholder activates the placeholder field at index i (if valid),
@@ -913,6 +1094,8 @@ func (m model) View() string {
 		b.WriteString(m.renderCommandsView())
 	case viewPreview:
 		b.WriteString(m.renderPreviewView())
+	case viewForm:
+		b.WriteString(m.renderFormView())
 	case viewConfirm:
 		b.WriteString(m.renderConfirmationView())
 	case viewOutput:
@@ -1341,6 +1524,95 @@ func (m model) renderPreviewView() string {
 		Render(headerContent + "\n" + content)
 }
 
+func (m model) renderFormView() string {
+	if m.form == nil || m.formCommand == nil {
+		return "No command selected"
+	}
+	result := m.formBuild()
+	if m.formViewport.Width < 1 {
+		m.formViewport.Width = m.width - 4
+	}
+	if m.formViewport.Height < 1 {
+		_, contentHeight := m.calculateLayout()
+		m.formViewport.Height = contentHeight - 4
+	}
+	if m.formViewport.Width < 1 {
+		m.formViewport.Width = 1
+	}
+	if m.formViewport.Height < 1 {
+		m.formViewport.Height = 1
+	}
+	lines := []string{
+		ui.SectionLabelStyle.Render("  ARGUMENTS"),
+	}
+	for i, argument := range m.form.commandSchema.Arguments {
+		for row := i; row < len(m.form.argumentRows) && (argument.Repeatable || row == i); row++ {
+			value := ""
+			if len(m.form.argumentRows[row]) == 1 {
+				value = m.form.argumentRows[row][0]
+			}
+			field := value
+			if m.form.focusedField == row && m.formInput.Focused() {
+				field = m.formInput.View()
+			}
+			if field == "" {
+				field = ui.PlaceholderEmptyStyle.Render("<empty>")
+			}
+			marker := "  "
+			if m.form.focusedField == row {
+				marker = ui.CmdCursorStyle.Render("▸ ")
+			}
+			lines = append(lines, marker+ui.PlaceholderLabelStyle.Render(argument.Name)+"  "+field)
+			if !argument.Repeatable {
+				break
+			}
+		}
+	}
+	if len(m.form.commandSchema.Arguments) == 0 {
+		lines = append(lines, "  "+ui.PreviewDefaultStyle.Render("No positional arguments"))
+	}
+	if len(m.form.commandSchema.Arguments) > 0 && m.form.commandSchema.Arguments[len(m.form.commandSchema.Arguments)-1].Repeatable {
+		lines = append(lines, "  "+ui.PreviewDefaultStyle.Render("+ add argument row   - remove focused row"))
+	}
+	lines = append(lines, "", ui.SectionLabelStyle.Render("  OPTIONS"))
+	for i, option := range m.form.options {
+		fieldIndex := len(m.form.argumentRows) + i
+		value := option.value
+		switch option.kind {
+		case commands.OptionKindBoolean:
+			if value == "true" {
+				value = "[x]"
+			} else {
+				value = "[ ]"
+			}
+		case commands.OptionKindSelect:
+			value = "<" + value + ">"
+		}
+		if fieldIndex == m.form.focusedField && m.formInput.Focused() && (option.kind == commands.OptionKindText || option.kind == commands.OptionKindNumeric) {
+			value = m.formInput.View()
+		}
+		marker := "  "
+		if fieldIndex == m.form.focusedField {
+			marker = ui.CmdCursorStyle.Render("▸ ")
+		}
+		lines = append(lines, marker+ui.PreviewFlagStyle.Render(option.flag)+"  "+value)
+	}
+	lines = append(lines, "", ui.SectionLabelStyle.Render("  GENERATED COMMAND"), "  "+ui.PreviewCmdStyle.Render("$ "+result.Display))
+	if m.form.validationError != nil {
+		lines = append(lines, "  "+ui.PlaceholderWarnStyle.Render("⚠ "+m.form.validationError.Error()))
+	}
+	lines = append(lines, "", ui.SectionLabelStyle.Render("  EXAMPLES / HELP"))
+	for _, example := range m.formCommand.Examples {
+		lines = append(lines, "  "+ui.PreviewExampleStyle.Render("$ "+example))
+	}
+	lines = append(lines, "", ui.PreviewDefaultStyle.Render("↑↓/Tab navigate • Space toggle • ←→ select • Enter submit • Esc back"))
+
+	m.formViewport.SetContent(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	content := m.formViewport.View()
+	header := ui.PreviewHeaderStyle.Render("  ▓  GUIDED FORM")
+	return ui.CardStyle.Width(m.width - 2).Render(header + "\n" + content)
+}
+
 func (m model) renderConfirmationView() string {
 	_, contentHeight := m.calculateLayout()
 	innerHeight := contentHeight - 2
@@ -1616,6 +1888,10 @@ func (m model) renderStatusBar(contentRowY int) string {
 			parts = append(parts, renderKeyHint("Enter", "Execute"))
 			parts = append(parts, renderKeyHint("Esc", "Back"))
 		}
+	} else if m.currentView == viewForm {
+		parts = append(parts, renderKeyHint("↑↓/Tab", "Navigate"))
+		parts = append(parts, renderKeyHint("Enter", "Submit"))
+		parts = append(parts, renderKeyHint("Esc", "Back"))
 	} else if m.currentView == viewConfirm {
 		parts = append(parts, renderKeyHint("Enter/Y", "Run"))
 		parts = append(parts, renderKeyHint("Esc/N", "Cancel"))
