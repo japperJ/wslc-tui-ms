@@ -859,7 +859,7 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 	}
 
 	schemas := map[string]*commands.CommandSchema{
-		"Container/ls":      {Options: []commands.Option{b("--all"), s("--format", "table", "json"), t("--filter"), b("--no-trunc")}},
+		"Container/ls":      {Options: []commands.Option{b("--all"), td("--format", "table"), t("--filter"), b("--no-trunc")}},
 		"Container/run":     {Arguments: []commands.Argument{a("image", true, false), a("command", false, true)}, Options: []commands.Option{b("--detach"), b("--interactive"), b("--tty"), t("--name"), t("--publish"), t("--volume"), t("--env"), b("--rm"), t("--network"), t("--workdir"), t("--cpus"), t("--memory"), t("--ulimit"), t("--shm-size"), t("--stop-signal"), t("--gpus")}},
 		"Container/create":  {Arguments: []commands.Argument{a("image", true, false), a("command", false, true)}, Options: []commands.Option{t("--name"), t("--publish"), t("--volume"), t("--env"), t("--network"), t("--workdir"), t("--cpus"), t("--memory"), t("--gpus")}},
 		"Container/exec":    {Arguments: []commands.Argument{a("container", true, false), a("command", true, true)}, Options: []commands.Option{b("--detach"), t("--env"), b("--interactive"), b("--privileged"), b("--tty"), t("--user"), t("--workdir")}},
@@ -874,7 +874,7 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 		"Container/export":  {Arguments: []commands.Argument{a("container", true, false)}, Options: []commands.Option{t("--output")}},
 		"Container/prune":   {Options: []commands.Option{b("--force")}},
 
-		"Image/ls":      {Options: []commands.Option{b("--all"), s("--format", "table", "json"), t("--filter"), b("--no-trunc")}},
+		"Image/ls":      {Options: []commands.Option{b("--all"), td("--format", "table"), t("--filter"), b("--no-trunc")}},
 		"Image/pull":    {Arguments: []commands.Argument{a("image", true, false)}, Options: []commands.Option{t("--platform")}},
 		"Image/push":    {Arguments: []commands.Argument{a("image", true, false)}},
 		"Image/tag":     {Arguments: []commands.Argument{a("source", true, false), a("target", true, false)}},
@@ -886,7 +886,7 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 		"Image/build":   {Arguments: []commands.Argument{a("path", true, false)}, Options: []commands.Option{t("--tag"), t("--file"), b("--no-cache"), b("--pull"), t("--label")}},
 		"Image/import":  {Arguments: []commands.Argument{a("file", true, false), a("image", false, false)}, Options: []commands.Option{t("--message"), t("--platform")}},
 
-		"Network/ls":         {Options: []commands.Option{s("--format", "table", "json"), t("--filter")}},
+		"Network/ls":         {Options: []commands.Option{td("--format", "table"), t("--filter")}},
 		"Network/create":     {Arguments: []commands.Argument{a("network", true, false)}, Options: []commands.Option{td("--driver", "bridge"), t("--subnet"), t("--gateway"), b("--internal")}},
 		"Network/rm":         {Arguments: []commands.Argument{a("networks", true, true)}},
 		"Network/inspect":    {Arguments: []commands.Argument{a("networks", true, true)}, Options: []commands.Option{t("--format")}},
@@ -894,7 +894,7 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 		"Network/disconnect": {Arguments: []commands.Argument{a("network", true, false), a("container", true, false)}, Options: []commands.Option{b("--force")}},
 		"Network/prune":      {Options: []commands.Option{b("--force")}},
 
-		"Volume/ls":      {Options: []commands.Option{s("--format", "table", "json"), t("--filter")}},
+		"Volume/ls":      {Options: []commands.Option{td("--format", "table"), t("--filter")}},
 		"Volume/create":  {Arguments: []commands.Argument{a("volume", false, false)}, Options: []commands.Option{t("--label"), t("--driver")}},
 		"Volume/rm":      {Arguments: []commands.Argument{a("volumes", true, true)}, Options: []commands.Option{b("--force")}},
 		"Volume/inspect": {Arguments: []commands.Argument{a("volumes", true, true)}, Options: []commands.Option{t("--format")}},

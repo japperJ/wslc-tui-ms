@@ -2,6 +2,7 @@ package data
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"wslc-tui-ms/internal/commands"
@@ -224,6 +225,46 @@ func TestCatalogRepresentativeCommandGeneration(t *testing.T) {
 	}
 }
 
+func TestListFormatAcceptsTemplatesAndWide(t *testing.T) {
+	for _, test := range []struct {
+		category string
+		format   string
+	}{
+		{category: "Container", format: "{{json .}}"},
+		{category: "Image", format: "wide"},
+		{category: "Network", format: "{{.Name}}"},
+		{category: "Volume", format: "wide"},
+	} {
+		command := catalogCommand(t, test.category, "ls")
+		result := commands.Build(
+			[]string{"wslc", strings.ToLower(test.category), "ls"},
+			*command.Schema,
+			nil,
+			map[string]string{"--format": test.format},
+		)
+		if len(result.Errors) != 0 {
+			t.Errorf("%s format %q returned errors: %v", test.category, test.format, result.Errors)
+		}
+		want := []string{"wslc", strings.ToLower(test.category), "ls", "--format", test.format}
+		if !reflect.DeepEqual(result.Args, want) {
+			t.Errorf("%s Args = %#v, want %#v", test.category, result.Args, want)
+		}
+	}
+}
+
+func TestStatsFormatRejectsUnsupportedValues(t *testing.T) {
+	command := catalogCommand(t, "Container", "stats")
+	result := commands.Build(
+		[]string{"wslc", "stats"},
+		*command.Schema,
+		nil,
+		map[string]string{"--format": "wide"},
+	)
+	if !containsCommandError(result.Errors, `option "--format" has invalid value "wide"`) {
+		t.Fatalf("stats accepted unsupported format: %v", result.Errors)
+	}
+}
+
 func catalogCommand(t *testing.T, category, name string) commands.Command {
 	t.Helper()
 	for _, command := range GetCommandsByCategory(category) {
@@ -250,6 +291,15 @@ func commandTokens(command commands.Command) []string {
 	default:
 		return []string{"wslc", command.Name}
 	}
+}
+
+func containsCommandError(errors []error, want string) bool {
+	for _, err := range errors {
+		if err.Error() == want {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(s, substr string) bool {
