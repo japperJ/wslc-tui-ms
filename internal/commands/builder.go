@@ -15,7 +15,8 @@ type BuildResult struct {
 	Errors  []error
 }
 
-// Build validates form values and builds a command without parsing Display.
+// Build validates form values and builds a command. Display is for review only;
+// it is never reparsed or executed.
 // Each positional row contains exactly one value. Non-repeatable arguments
 // consume one row in schema order; a repeatable argument consumes the rest.
 func Build(command []string, schema CommandSchema, argumentRows [][]string, optionValues map[string]string) BuildResult {
@@ -23,9 +24,12 @@ func Build(command []string, schema CommandSchema, argumentRows [][]string, opti
 	rowIndex := 0
 	hasRepeatable := false
 
-	for _, argument := range schema.Arguments {
+	for argumentIndex, argument := range schema.Arguments {
 		if argument.Repeatable {
 			hasRepeatable = true
+			if argumentIndex != len(schema.Arguments)-1 {
+				result.Errors = append(result.Errors, fmt.Errorf("repeatable argument %q must be final", argument.Name))
+			}
 			startRow := rowIndex
 			for ; rowIndex < len(argumentRows); rowIndex++ {
 				value, ok := positionalValue(argumentRows[rowIndex])
@@ -54,9 +58,7 @@ func Build(command []string, schema CommandSchema, argumentRows [][]string, opti
 		value, ok := positionalValue(argumentRows[rowIndex])
 		rowIndex++
 		if !ok {
-			if argument.Required {
-				result.Errors = append(result.Errors, fmt.Errorf("required argument %q is missing", argument.Name))
-			} else if len(argumentRows[rowIndex-1]) > 1 {
+			if len(argumentRows[rowIndex-1]) > 1 || argument.Required {
 				result.Errors = append(result.Errors, fmt.Errorf("argument %q has an incomplete row", argument.Name))
 			}
 			continue

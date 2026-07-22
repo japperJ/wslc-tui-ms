@@ -78,6 +78,13 @@ func TestBuildRejectsInvalidValues(t *testing.T) {
 	if len(result.Errors) != 3 {
 		t.Fatalf("got %d errors, want 3: %v", len(result.Errors), result.Errors)
 	}
+	if !containsError(result.Errors, `option "--format" has invalid value`) ||
+		!containsError(result.Errors, `option "--timeout" has invalid numeric value`) {
+		t.Errorf("errors do not identify invalid options: %v", result.Errors)
+	}
+	if !reflect.DeepEqual(result.Args, []string{"wslc", "tag", "source"}) {
+		t.Errorf("Args contains invalid values: %#v", result.Args)
+	}
 }
 
 func TestBuildRejectsIncompleteRows(t *testing.T) {
@@ -107,6 +114,31 @@ func TestBuildRejectsRequiredRepeatableArgumentWithoutRows(t *testing.T) {
 
 	if len(result.Errors) != 1 {
 		t.Fatalf("got %d errors, want 1: %v", len(result.Errors), result.Errors)
+	}
+}
+
+func TestBuildRejectsNonFinalRepeatableArgument(t *testing.T) {
+	schema := CommandSchema{Arguments: []Argument{
+		{Name: "containers", Repeatable: true},
+		{Name: "target", Required: true},
+	}}
+	result := Build([]string{"wslc", "copy"}, schema, nil, nil)
+
+	if !containsError(result.Errors, `repeatable argument "containers" must be final`) {
+		t.Fatalf("errors do not report non-final repeatable argument: %v", result.Errors)
+	}
+}
+
+func TestBuildReportsIncompleteRequiredRows(t *testing.T) {
+	schema := CommandSchema{Arguments: []Argument{{Name: "source", Required: true}}}
+	for _, row := range [][]string{{}, {"source", "extra"}} {
+		result := Build([]string{"wslc", "tag"}, schema, [][]string{row}, nil)
+		if !containsError(result.Errors, `argument "source" has an incomplete row`) {
+			t.Errorf("row %#v errors do not report incomplete row: %v", row, result.Errors)
+		}
+		if containsError(result.Errors, `required argument "source" is missing`) {
+			t.Errorf("row %#v has misleading missing error: %v", row, result.Errors)
+		}
 	}
 }
 
@@ -146,4 +178,13 @@ func TestBuildKeepsExecutableArgumentsSeparateFromDisplay(t *testing.T) {
 	if result.Display == strings.Join(result.Args, " ") {
 		t.Errorf("display command was not quoted separately: %q", result.Display)
 	}
+}
+
+func containsError(errors []error, want string) bool {
+	for _, err := range errors {
+		if strings.Contains(err.Error(), want) {
+			return true
+		}
+	}
+	return false
 }
