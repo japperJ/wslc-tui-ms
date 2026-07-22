@@ -1,11 +1,16 @@
 package commands
 
+// OptionKind identifies the control used to edit an option value.
 type OptionKind string
 
 const (
+	// OptionKindBoolean identifies a boolean option.
 	OptionKindBoolean OptionKind = "boolean"
-	OptionKindText    OptionKind = "text"
-	OptionKindSelect  OptionKind = "select"
+	// OptionKindText identifies a free-form text option.
+	OptionKindText OptionKind = "text"
+	// OptionKindSelect identifies an option with a fixed set of choices.
+	OptionKindSelect OptionKind = "select"
+	// OptionKindNumeric identifies a numeric option.
 	OptionKindNumeric OptionKind = "numeric"
 )
 
@@ -18,6 +23,7 @@ type Validation struct {
 	Max       int
 }
 
+// Argument describes an ordered positional command argument.
 type Argument struct {
 	Name        string
 	Label       string
@@ -27,6 +33,7 @@ type Argument struct {
 	Validation  Validation
 }
 
+// Option describes an ordered command option.
 type Option struct {
 	Flag        string
 	Description string
@@ -37,6 +44,7 @@ type Option struct {
 	Validation  Validation
 }
 
+// CommandSchema describes the positional arguments and options for a command.
 type CommandSchema struct {
 	Arguments []Argument
 	Options   []Option
