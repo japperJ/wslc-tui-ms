@@ -136,3 +136,17 @@ func TestFormStoresBuilderCommandState(t *testing.T) {
 		t.Fatalf("stored command args = %#v, want %#v", form.buildResult.Args, want)
 	}
 }
+
+func TestFormSchemaChoicesAreIsolatedFromSource(t *testing.T) {
+	command := testFormCommand()
+	form := newFormState(command, nil)
+	command.Schema.Options[1].Choices[0] = "yaml"
+	form.argumentRows[0][0] = "ubuntu"
+	form.argumentRows[1][0] = "echo"
+	form.setOption("--format", "table")
+
+	result := form.build([]string{"wslc", "container", "run"})
+	if len(result.Errors) != 0 {
+		t.Fatalf("form validation changed after source mutation: %v", result.Errors)
+	}
+}

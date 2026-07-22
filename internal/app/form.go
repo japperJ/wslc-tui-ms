@@ -32,6 +32,9 @@ func newFormState(command commands.Command, remembered map[string]string) *formS
 
 	form.commandSchema.Arguments = append([]commands.Argument(nil), command.Schema.Arguments...)
 	form.commandSchema.Options = append([]commands.Option(nil), command.Schema.Options...)
+	for index := range form.commandSchema.Options {
+		form.commandSchema.Options[index].Choices = append([]string(nil), command.Schema.Options[index].Choices...)
+	}
 	for range form.commandSchema.Arguments {
 		form.argumentRows = append(form.argumentRows, []string{""})
 	}
