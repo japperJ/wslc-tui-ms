@@ -3,7 +3,7 @@
 ## Files
 
 - `scripts/build-phase1-test-iso.ps1` creates a new tagged staging directory and, when `oscdimg.exe` is available, a new ISO. It refuses to overwrite either output.
-- `packaging/tests/RUN-TESTS.ps1` is the VM entry point. It derives the bundle root from `$PSScriptRoot`, infers a single release tag from tagged metadata/checksum files when `-Tag` is omitted, validates prebuilt artifacts under `artifacts\`, and requires only Windows x64, UAC, a non-admin account, and PowerShell. Child smoke scripts run through the current host under both Windows PowerShell 5.1 and PowerShell 7.
+- `packaging/tests/RUN-TESTS.ps1` is the VM entry point. It derives the bundle root from `$PSScriptRoot`, infers a single release tag from tagged metadata/checksum files when `-Tag` is omitted, validates prebuilt artifacts under `artifacts\`, and requires only Windows x64, UAC, a non-admin account, and Windows PowerShell 5.1. Child smoke scripts run through `powershell.exe`.
 - `packaging/iso/README.md` documents VM prerequisites, admin-only setup, standard-user execution, evidence, and export.
 - `packaging/iso/dependencies.json` records that the standard-user smoke run has no developer-tool dependency.
 - `docs/releases.md` and `README.md` link the workflow.
@@ -49,17 +49,40 @@ manifest-backed bundle and prebuilt packaging artifacts.
 - SHA-256: `56311EAC22CC3EC287C6EDABFB3DD1F11FC1559B3A07F155C1D85064F27D38CE`
 - `Mount-DiskImage` attached it as `E:\`; Windows reported filesystem `UDF`.
 - `E:\README.md` was read successfully (`3,045` bytes).
-- `E:\RUN-TESTS.ps1` was read successfully and contains the payload-only checksum validation plus current-host child-script selection.
+- `E:\RUN-TESTS.ps1` was read successfully and contains the payload-only checksum validation plus Windows PowerShell child-script selection.
 - `E:\bundle-manifest.json` was read successfully (`10,846` bytes).
 - `Dismount-DiskImage` completed successfully.
 - The existing `wslc-tui-ms.iso` was not modified. The generated ISO is intentionally not committed.
 
-## Limitations
+## New Windows PowerShell 5.1 ISO
 
-- The repository does not contain redistributable Go/WiX installers. Supply
-  them through `-DependencyRoot` and verify hashes before disconnecting the VM.
-- Go, .NET, and WiX are administrator/developer build-VM prerequisites only;
-  Go and WiX are not required inside the VM, and the final standard-user setup
-  test does not install or resolve them.
-- No credentials, tokens, signing certificates, or GitHub access are needed
-  or copied. The bundle does not fetch repository content at runtime.
+- Source artifacts: `artifacts/dist-v1.2.3`
+- Exact ISO: `C:\REP\wslc-tui-ms\artifacts\phase1-powershell51-v1.2.3-rerun\wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
+- Repository-relative path: `artifacts/phase1-powershell51-v1.2.3-rerun/wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
+- Size: `6,750,208` bytes
+- SHA-256: `da3488022b2c93af06b4564205ab277db1a7b018085397f67e3e62794315922d`
+- Authoring: Windows IMAPI2FS fallback; `oscdimg.exe` was unavailable.
+- Mounted drive: `E:\`; `E:\RUN-TESTS.ps1` was inspected and then the image was dismounted.
+- Mounted runner assertions passed: no `pwsh` string and contains `powershell.exe`.
+- The six existing ISO files under `artifacts/` were preserved; the new ISO used a unique output directory.
+
+## Windows PowerShell Runner ISO
+
+- Source artifacts: `artifacts/dist-v1.2.3`
+- ISO path: `C:\REP\wslc-tui-ms\artifacts\phase1-powershell51-v1.2.3-rerun\wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
+- Repository-relative path: `artifacts/phase1-powershell51-v1.2.3-rerun/wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
+- Size: `6,750,208` bytes
+- SHA-256: `da3488022b2c93af06b4564205ab277db1a7b018085397f67e3e62794315922d`
+- Authoring: Windows IMAPI2FS fallback; `oscdimg.exe` was unavailable.
+
+## Mounted Inspection
+
+- Mounted drive: `E:\`
+- Inspected file: `E:\RUN-TESTS.ps1`
+- Assertion: passed, mounted runner contains no `pwsh` string.
+- Assertion: passed, mounted runner contains `powershell.exe`.
+- Dismounted after inspection: yes.
+
+## Preservation
+
+The six existing ISO files under `artifacts/` were preserved. The new ISO was written in the uniquely named `artifacts/phase1-powershell51-v1.2.3-rerun/` directory and did not overwrite an existing image.

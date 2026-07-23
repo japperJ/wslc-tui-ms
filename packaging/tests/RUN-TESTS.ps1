@@ -68,7 +68,7 @@ $installRoot = Join-Path $env:LOCALAPPDATA 'wslc-tui-ms'
 $msi = Join-Path $artifacts "wslc-tui-$Tag-windows-amd64.msi"
 $bootstrapper = Join-Path $artifacts "wslc-tui-$Tag-windows-amd64.exe"
 $portable = Join-Path $artifacts "wslc-tui-$Tag-windows-amd64-portable.zip"
-$hostExecutable = Join-Path $PSHOME $(if ($PSEdition -eq 'Core') { 'pwsh.exe' } else { 'powershell.exe' })
+$hostExecutable = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 if (-not (Test-Path $hostExecutable -PathType Leaf)) { throw "Current PowerShell host executable was not found: $hostExecutable" }
 & $hostExecutable -NoProfile -File (Join-Path $smokeRoot 'smoke-portable.ps1') -Portable $portable -Tag $Tag -ExtractRoot (Join-Path $results 'portable') *>&1 |
   Tee-Object (Join-Path $results 'portable-result.txt')
