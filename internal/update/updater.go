@@ -101,6 +101,14 @@ func tempAssetPattern(handoff Handoff) (string, error) {
 }
 
 func runInstaller(program string, args ...string) error {
+	if strings.EqualFold(filepath.Base(program), "msiexec.exe") {
+		// Killing the msiexec client does not cancel Windows Installer's service
+		// transaction; it can continue in the background and install later.
+		if err := exec.Command(program, args...).Run(); err != nil {
+			return fmt.Errorf("installer failed (exit code %d): %w", exitCode(err), err)
+		}
+		return nil
+	}
 	return runInstallerWithTimeout(5*time.Minute, program, args...)
 }
 
