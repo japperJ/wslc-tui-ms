@@ -405,7 +405,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "enter":
 				m.splashActive = false
-				m.currentView = viewCommands
+				if m.updateDecision != nil {
+					m.currentView = viewUpdate
+				} else {
+					m.currentView = viewCommands
+				}
 				return m, nil
 			case "ctrl+c":
 				return m, tea.Quit
@@ -2434,6 +2438,7 @@ func (m model) renderStatusBar(contentRowY int) string {
 			parts = append(parts, renderKeyHint("Esc", "Unfocus"))
 			parts = append(parts, renderKeyHint("Tab", "Complete"))
 			parts = append(parts, renderKeyHint("Enter", "Select"))
+			parts = append(parts, renderKeyHint("u", "Updates"))
 		} else {
 			parts = append(parts, renderKeyHint("↑↓", "Navigate"))
 			parts = append(parts, renderKeyHint("Enter", "Run/Preview"))
@@ -2534,6 +2539,8 @@ func hintAction(s string) string {
 		return "category"
 	case "?":
 		return "help"
+	case "u":
+		return "check-updates"
 	case "r":
 		return "rerun"
 	case "c":

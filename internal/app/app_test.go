@@ -149,6 +149,13 @@ func TestFocusedCommandSearchUppercaseUStartsManualUpdateCheck(t *testing.T) {
 	}
 }
 
+func TestFocusedCommandFooterShowsUpdateShortcut(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	if !strings.Contains(m.View(), "u Updates") {
+		t.Fatalf("focused command footer omitted update shortcut:\n%s", m.View())
+	}
+}
+
 func TestCommandBrowserChannelShortcutTogglesAndFindsBetaPrerelease(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	store := settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))

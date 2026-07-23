@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 	"testing"
+	"wslc-tui-ms/internal/update"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -43,5 +44,17 @@ func TestSplashWaitsForEnter(t *testing.T) {
 	got = updated.(model)
 	if got.splashActive {
 		t.Fatal("splash should end when Enter is pressed")
+	}
+}
+
+func TestSplashDismissalPreservesStartupUpdateView(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.splashActive = true
+	m.updateDecision = &update.Decision{Available: true, Version: "v2.0.0"}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := updated.(model)
+	if got.currentView != viewUpdate {
+		t.Fatalf("startup update view was lost on splash dismissal: %v", got.currentView)
 	}
 }
