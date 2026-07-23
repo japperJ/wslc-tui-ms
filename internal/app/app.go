@@ -242,6 +242,7 @@ type splashTickMsg struct{}
 type updateResultMsg struct {
 	decision update.Decision
 	err      error
+	manual   bool
 }
 
 type updateInstallMsg struct{ err error }
@@ -383,6 +384,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateResultMsg:
 		m.updateChecking = false
 		m.updateError = msg.err
+		if msg.manual && msg.err == nil && !msg.decision.Available && !msg.decision.Mandatory {
+			m.updateStatus = "No newer update found."
+		}
 		if msg.err == nil && (msg.decision.Available || msg.decision.Mandatory) {
 			m.updateDecision = &msg.decision
 			m.currentView = viewUpdate
@@ -829,13 +833,14 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 func (m model) updateCheckCommand(manual bool) tea.Cmd {
 	return func() tea.Msg {
 		decision, err := m.updateService.Check(context.Background(), m.updateChannel, manual)
-		return updateResultMsg{decision: decision, err: err}
+		return updateResultMsg{decision: decision, err: err, manual: manual}
 	}
 }
 
 func (m *model) startUpdateCheck(manual bool) tea.Cmd {
 	m.updateChecking = true
 	m.updateError = nil
+	m.updateStatus = ""
 	return m.updateCheckCommand(manual)
 }
 
@@ -1645,7 +1650,7 @@ func (m model) renderCommandsView() string {
 	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, " ", content)
 
 	var parts []string
-	if m.updateChecking || m.updateDecision != nil || m.updateError != nil || m.channelStatus != "" {
+	if m.updateChecking || m.updateDecision != nil || m.updateError != nil || m.channelStatus != "" || m.updateStatus != "" {
 		parts = append(parts, m.renderUpdateBanner(), "")
 	}
 	parts = append(parts, mainContent)
@@ -1676,6 +1681,9 @@ func (m model) renderUpdateBanner() string {
 			label = "Required update: " + m.updateDecision.Version + "  [u] View notes"
 		}
 		return ui.CardActiveStyle.Width(m.width - 2).Render("  " + label)
+	}
+	if m.updateStatus != "" {
+		return ui.CardStyle.Width(m.width - 2).Render("  " + m.updateStatus)
 	}
 	if m.channelStatus != "" {
 		return ui.CardActiveStyle.Width(m.width - 2).Render("  " + m.channelStatus)

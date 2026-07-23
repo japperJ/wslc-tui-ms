@@ -106,6 +106,19 @@ func TestAutomaticUpdateFailureIsNonBlocking(t *testing.T) {
 	}
 }
 
+func TestManualUpdateCheckLeavesReadableCompletionStatus(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.updateChecking = true
+	updated, cmd := m.Update(updateResultMsg{manual: true})
+	m = updated.(model)
+	if cmd != nil || m.updateChecking {
+		t.Fatal("manual check should finish without another command")
+	}
+	if m.updateStatus != "No newer update found." {
+		t.Fatalf("completion status = %q", m.updateStatus)
+	}
+}
+
 func TestFocusedCommandSearchUStartsManualUpdateCheck(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))}
