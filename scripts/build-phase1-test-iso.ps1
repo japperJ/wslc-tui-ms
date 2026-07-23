@@ -24,6 +24,57 @@ function Copy-RepoItem([string]$RelativePath) {
   Copy-Item $source $destination -Recurse -Force
 }
 
+function Write-ImapiIso([string]$SourceDirectory, [string]$IsoPath, [string]$VolumeName) {
+  if (-not ('ImapiIsoWriter' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+public static class ImapiIsoWriter {
+  public static long Write(object source, string path) {
+    IntPtr unknown = Marshal.GetIUnknownForObject(source);
+    IntPtr interfacePointer = IntPtr.Zero;
+    Guid iid = typeof(IStream).GUID;
+    Marshal.QueryInterface(unknown, iid, out interfacePointer);
+    try {
+      IStream stream = (IStream)Marshal.GetTypedObjectForIUnknown(interfacePointer, typeof(IStream));
+      IntPtr count = Marshal.AllocHGlobal(4);
+      byte[] buffer = new byte[1048576];
+      try {
+        long total = 0;
+        using (FileStream output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None)) {
+          while (true) {
+            Marshal.WriteInt32(count, 0);
+            stream.Read(buffer, buffer.Length, count);
+            int read = Marshal.ReadInt32(count);
+            if (read <= 0) break;
+            output.Write(buffer, 0, read);
+            total += read;
+          }
+        }
+        return total;
+      } finally { Marshal.FreeHGlobal(count); }
+    } finally {
+      if (interfacePointer != IntPtr.Zero) Marshal.Release(interfacePointer);
+      Marshal.Release(unknown);
+    }
+  }
+}
+'@
+  }
+  $filesystemImage = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
+  try {
+    $filesystemImage.FileSystemsToCreate = 7 # FsiFileSystemISO9660 + Joliet + UDF
+    $filesystemImage.VolumeName = $VolumeName
+    $filesystemImage.Root.AddTree($SourceDirectory, $false)
+    $resultImage = $filesystemImage.CreateResultImage()
+    [void][ImapiIsoWriter]::Write($resultImage.ImageStream, $IsoPath)
+  } finally {
+    if ($filesystemImage) { [Runtime.InteropServices.Marshal]::ReleaseComObject($filesystemImage) | Out-Null }
+  }
+}
+
 foreach ($item in @('README.md', 'go.mod', 'go.sum', 'update-policy.json', 'main.go', 'internal', 'packaging', 'scripts', 'docs', '.github')) {
   Copy-RepoItem $item
 }
@@ -55,6 +106,8 @@ if ($OscdimgPath) {
   if ($LASTEXITCODE -ne 0) { throw 'oscdimg failed.' }
   Write-Output "ISO=$iso"
 } else {
-  Write-Warning 'oscdimg.exe was not found. Staging is complete; install the Windows ADK or pass -OscdimgPath to create the ISO.'
-  Write-Output "STAGING=$bundle"
+  Write-Warning 'oscdimg.exe was not found. Using the built-in Windows IMAPI2FS ISO authoring fallback.'
+  Write-ImapiIso $bundle $iso $bundleName
+  if (-not (Test-Path $iso) -or (Get-Item $iso).Length -eq 0) { throw "IMAPI2FS created an empty or missing ISO: $iso" }
+  Write-Output "ISO=$iso"
 }

@@ -31,11 +31,18 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ## Validation
 
-The staging script was run on the current host and produced a manifest-backed
-bundle. The host has PowerShell and Go but does not have `wix` 4.0.5 or
-`oscdimg.exe`, so the Windows MSI/bootstrapper matrix and ISO authoring could
-not be executed here. The resulting staging path is the reproducible input to
-the Windows ADK `oscdimg` command above.
+The tagged build was run on the current Windows host with `oscdimg.exe`
+unavailable. The script used the built-in
+`IMAPI2FS.MsftFileSystemImage` fallback and produced a mountable ISO with a
+manifest-backed bundle.
+
+- Exact ISO: `C:\REP\wslc-tui-ms\artifacts\phase1-v1.2.3-imapi2fs-final2\wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
+- Size: `1,835,008` bytes
+- `Mount-DiskImage` attached it as `E:\`; Windows reported filesystem `UDF`.
+- `E:\README.md` was read successfully (`3,045` bytes).
+- `E:\bundle-manifest.json` was read successfully (`10,846` bytes).
+- `Dismount-DiskImage` completed successfully.
+- The existing `wslc-tui-ms.iso` was not modified. The generated ISO is intentionally not committed.
 
 ## Limitations
 
