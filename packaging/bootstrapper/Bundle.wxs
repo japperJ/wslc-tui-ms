@@ -4,7 +4,7 @@
   <Bundle Name="WSLC TUI" Version="$(var.ProductVersion)"
           Manufacturer="japperJ" UpgradeCode="B83DA2B6-0D4B-4B6B-97AC-5A7E5D0EF1D3">
     <BootstrapperApplication>
-      <bal:WixStandardBootstrapperApplication LicenseUrl="" Theme="hyperlinkLicense" />
+      <bal:WixStandardBootstrapperApplication LicenseUrl="https://github.com/japperJ/wslc-tui-ms/blob/main/README.md" Theme="hyperlinkLicense" />
     </BootstrapperApplication>
     <Chain>
       <MsiPackage SourceFile="$(var.MsiPath)" DisplayInternalUI="no" />

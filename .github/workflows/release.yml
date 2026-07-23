@@ -1,0 +1,94 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.24.5'
+  WIX_VERSION: '4.0.5'
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install WiX Toolset v4
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version $env:WIX_VERSION
+          wix extension add -g WixToolset.Bal.wixext/4.0.5
+
+      - name: Test Go source
+        run: |
+          go test ./...
+          go vet ./...
+
+      - name: Build unsigned distributions
+        shell: pwsh
+        env:
+          SIGNING_COMMAND: ${{ secrets.SIGNING_COMMAND }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          # The tag job creates a draft prerelease. Promotion to Stable is a
+          # GitHub Release state change and must not rebuild these binaries.
+          ./packaging/build.ps1 -Tag $tag -Channel Beta -Output ./dist -Commit '${{ github.sha }}' -BuildDate '${{ github.event.head_commit.timestamp }}'
+          if ($env:SIGNING_COMMAND) { & $env:SIGNING_COMMAND ./dist } else { Write-Output 'Signing disabled: SIGNING_COMMAND is unset.' }
+
+      - name: Generate and validate checksums
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $files = @(
+            "wslc-tui-$tag-windows-amd64.msi",
+            "wslc-tui-$tag-windows-amd64.exe",
+            "wslc-tui-$tag-windows-amd64-portable.zip",
+            'update-policy.json'
+          )
+          $assets = foreach ($name in $files) {
+            $file = Join-Path ./dist $name
+            if (-not (Test-Path $file)) { throw "Missing release payload: $name" }
+            $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            [ordered]@{ name = $name; sizeBytes = (Get-Item $file).Length; sha256 = $hash }
+          }
+          [ordered]@{ schemaVersion = 1; releaseTag = $tag; algorithm = 'sha256'; assets = @($assets) } |
+            ConvertTo-Json -Depth 5 | Set-Content ./dist/"wslc-tui-$tag-checksums.json" -Encoding utf8NoBOM
+          ./packaging/tests/test-package.ps1 -Dist ./dist -Tag $tag
+          ./packaging/tests/test-contracts.ps1
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-${{ github.ref_name }}
+          path: |
+            dist/*.msi
+            dist/*.exe
+            dist/*portable.zip
+            dist/*checksums.json
+            update-policy.json
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: true
+          files: |
+            dist/wslc-tui-${{ github.ref_name }}-windows-amd64.msi
+            dist/wslc-tui-${{ github.ref_name }}-windows-amd64.exe
+            dist/wslc-tui-${{ github.ref_name }}-windows-amd64-portable.zip
+            dist/wslc-tui-${{ github.ref_name }}-checksums.json
+            update-policy.json

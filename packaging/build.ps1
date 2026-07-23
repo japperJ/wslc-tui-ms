@@ -17,6 +17,7 @@ $msi = Join-Path $Output "wslc-tui-$Tag-windows-amd64.msi"
 $bundle = Join-Path $Output "wslc-tui-$Tag-windows-amd64.exe"
 $zip = Join-Path $Output "wslc-tui-$Tag-windows-amd64-portable.zip"
 New-Item -ItemType Directory -Force -Path $Output, $portable | Out-Null
+Copy-Item (Join-Path $root 'update-policy.json') (Join-Path $Output 'update-policy.json') -Force
 
 $ldflags = "-s -w -X wslc-tui-ms/internal/buildinfo.Version=$Tag -X wslc-tui-ms/internal/buildinfo.Commit=$Commit -X wslc-tui-ms/internal/buildinfo.BuildDate=$BuildDate -X wslc-tui-ms/internal/buildinfo.Channel=$Channel -X wslc-tui-ms/internal/buildinfo.Distribution="
 $env:GOOS = 'windows'; $env:GOARCH = 'amd64'
@@ -34,6 +35,6 @@ $installerLdflags = "-s -w -X wslc-tui-ms/internal/buildinfo.Version=$Tag -X wsl
 if ($LASTEXITCODE -ne 0) { throw 'Installer Go build failed' }
 & wix build -arch x64 -d ProductVersion=$version -d ApplicationExecutable=$installerBin -o $msi (Join-Path $root 'packaging/wix/Product.wxs')
 if ($LASTEXITCODE -ne 0) { throw 'WiX MSI build failed' }
-& wix build -arch x64 -d ProductVersion=$version -d MsiPath=$msi -o $bundle (Join-Path $root 'packaging/bootstrapper/Bundle.wxs')
+& wix build -arch x64 -ext WixToolset.Bal.wixext -d ProductVersion=$version -d MsiPath=$msi -o $bundle (Join-Path $root 'packaging/bootstrapper/Bundle.wxs')
 if ($LASTEXITCODE -ne 0) { throw 'WiX bootstrapper build failed' }
 Write-Output "Built $zip, $msi, and $bundle"
