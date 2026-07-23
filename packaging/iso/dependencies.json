@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "required": [
+    {
+      "name": "Go",
+      "version": "1.24.5",
+      "stagedPath": "tools/go/go1.24.5.windows-amd64.msi",
+      "source": "https://go.dev/dl/go1.24.5.windows-amd64.msi",
+      "sha256": "TO_BE_STAGED"
+    },
+    {
+      "name": "WiX Toolset",
+      "version": "4.0.5",
+      "stagedPath": "tools/wix/wix-4.0.5.nupkg",
+      "source": "https://www.nuget.org/packages/wix/4.0.5",
+      "sha256": "TO_BE_STAGED"
+    },
+    {
+      "name": "WiX Bal extension",
+      "version": "4.0.5",
+      "stagedPath": "tools/wix/WixToolset.Bal.wixext-4.0.5.nupkg",
+      "source": "https://www.nuget.org/packages/WixToolset.Bal.wixext/4.0.5",
+      "sha256": "TO_BE_STAGED"
+    }
+  ]
+}

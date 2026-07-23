@@ -31,6 +31,21 @@ The default smoke preflight requires pinned WiX v4.0.5, Windows x64 tools, UAC, 
 
 No signing certificate or signing secret is needed for the initial unsigned release. `SIGNING_COMMAND` is an optional future boundary in the workflow and is skipped when unset. Unsigned artifacts can trigger a Windows SmartScreen unknown-publisher prompt.
 
+## Offline Phase 1 VM Bundle
+
+Build a repository-independent test bundle without touching the existing ISO:
+
+```powershell
+./scripts/build-phase1-test-iso.ps1 -Tag v1.2.3 -OutputDirectory ./artifacts -DependencyRoot ./staged-tools
+```
+
+The script creates `wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso` when
+`oscdimg.exe` is installed, or a complete staging directory when it is not.
+Pass `-OscdimgPath` with the Windows ADK `oscdimg.exe` to make the ISO later.
+The bundle contains `RUN-TESTS.ps1`, the source/build inputs, the smoke scripts,
+and the dependency staging contract. See the bundle README for clean VM setup,
+standard-user requirements, evidence files, and result export instructions.
+
 ## Channel Promotion
 
 The release workflow creates a draft with the selected prerelease state. GitHub release `prerelease=true` maps to Beta and `false` maps to Stable. Promoting a draft changes only that state: do not rebuild, rename, replace assets, or regenerate checksums.

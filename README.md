@@ -72,6 +72,7 @@ Maintainers publish Windows x64 MSI, EXE/bootstrapper, and portable ZIP assets f
 Release policy is the version-controlled [`update-policy.json`](update-policy.json), consumed publicly at `https://raw.githubusercontent.com/japperJ/wslc-tui-ms/main/update-policy.json`. GitHub's release `prerelease` flag is the channel source of truth: `true` is Beta and `false` is Stable. Promotion changes release state only and does not rebuild assets. Initial artifacts are unsigned, so Windows SmartScreen may show an unknown-publisher warning; signing is an optional future workflow hook.
 
 The maintainer packaging procedure and non-admin VM smoke tests are documented in [`docs/releases.md`](docs/releases.md).
+The offline disposable-VM bundle is built with [`scripts/build-phase1-test-iso.ps1`](scripts/build-phase1-test-iso.ps1); it never overwrites the checked-in `wslc-tui-ms.iso`.
 
 ## Basic Workflow
 
