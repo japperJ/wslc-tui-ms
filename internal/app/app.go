@@ -261,7 +261,8 @@ func (m *model) setViewportOutput() {
 		if m.outputResult.Error != nil {
 			lines = append(lines, ui.OutputErrorStyle.Render(fmt.Sprintf("Command failed: %s", m.outputResult.Error.Error())))
 		} else {
-			lines = append(lines, ui.OutputSuccessStyle.Render("  ✓ Command completed successfully (no output)"))
+			lines = append(lines, ui.OutputSuccessStyle.Render(fmt.Sprintf("  ✓ Command completed successfully (exit code %d)", m.outputResult.ExitCode)))
+			lines = append(lines, ui.ScrollStyle.Render("  WSLC returned no stdout/stderr."))
 		}
 	} else if strings.HasPrefix(output, "{") || strings.HasPrefix(output, "[") {
 		prettyJSON := formatJSON(output)
