@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') { throw "Tag must be a SemVer tag: $Tag" }
 $version = $Tag.Substring(1)
+$msiVersion = ($version -split '-')[0]
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $bin = Join-Path $Output 'wslc-tui.exe'
 $updaterBin = Join-Path $Output 'wslc-tui-updater.exe'
@@ -38,8 +39,8 @@ if ($null -eq $wix) { Write-Warning 'WiX v4 (wix) is unavailable; MSI and bootst
 $installerLdflags = "-s -w -X wslc-tui-ms/internal/buildinfo.Version=$Tag -X wslc-tui-ms/internal/buildinfo.Commit=$Commit -X wslc-tui-ms/internal/buildinfo.BuildDate=$BuildDate -X wslc-tui-ms/internal/buildinfo.Channel=$Channel -X wslc-tui-ms/internal/buildinfo.Distribution=installer"
 & go build -trimpath -ldflags $installerLdflags -o $installerBin $root
 if ($LASTEXITCODE -ne 0) { throw 'Installer Go build failed' }
-& wix build -arch x64 -d ProductVersion=$version -d ApplicationExecutable=$installerBin -d UpdaterExecutable=$updaterBin -o $msi (Join-Path $root 'packaging/wix/Product.wxs')
+& wix build -arch x64 -d ProductVersion=$msiVersion -d ApplicationExecutable=$installerBin -d UpdaterExecutable=$updaterBin -o $msi (Join-Path $root 'packaging/wix/Product.wxs')
 if ($LASTEXITCODE -ne 0) { throw 'WiX MSI build failed' }
-& wix build -arch x64 -ext WixToolset.Bal.wixext -d ProductVersion=$version -d MsiPath=$msi -o $bundle (Join-Path $root 'packaging/bootstrapper/Bundle.wxs')
+& wix build -arch x64 -ext WixToolset.Bal.wixext -d ProductVersion=$msiVersion -d MsiPath=$msi -o $bundle (Join-Path $root 'packaging/bootstrapper/Bundle.wxs')
 if ($LASTEXITCODE -ne 0) { throw 'WiX bootstrapper build failed' }
 Write-Output "Built $zip, $msi, and $bundle"
