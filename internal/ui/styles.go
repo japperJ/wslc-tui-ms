@@ -58,6 +58,10 @@ var (
 			Foreground(ColorTextMuted).
 			Padding(0, 1)
 
+	AdminWarningStyle = lipgloss.NewStyle().
+				Foreground(ColorRed).
+				Bold(true)
+
 	// Sidebar styles
 	SidebarTitleStyle = lipgloss.NewStyle().
 				Foreground(ColorTextMuted).

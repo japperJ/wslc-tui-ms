@@ -12,6 +12,7 @@ import (
 	"time"
 	"wslc-tui-ms/internal/commands"
 	"wslc-tui-ms/internal/data"
+	"wslc-tui-ms/internal/platform"
 	"wslc-tui-ms/internal/ui"
 
 	"github.com/atotto/clipboard"
@@ -95,6 +96,7 @@ type model struct {
 	formFieldLines map[int]int
 
 	// Status
+	adminMode      bool
 	lastCopied     string
 	showTooltip    bool
 	tooltipContent string
@@ -151,6 +153,7 @@ func NewModel() model {
 
 	m := model{
 		currentView:    viewCommands,
+		adminMode:      platform.IsElevated(),
 		inputFocused:   true,
 		categories:     categories,
 		allCommands:    allCmds,
@@ -1189,6 +1192,9 @@ func (m model) renderHeader() string {
 	// Left side: title + tagline
 	title := ui.HeaderTitleStyle.Render("  ▓  WSLC TUI  ")
 	tagline := ui.HeaderTaglineStyle.Render("Native containers for WSL")
+	if !m.adminMode {
+		tagline = ui.AdminWarningStyle.Render("Administrator mode required")
+	}
 	leftSide := lipgloss.JoinHorizontal(lipgloss.Center, title, tagline)
 
 	// Right side: tabs + help

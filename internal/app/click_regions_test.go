@@ -159,3 +159,13 @@ func TestOutputFooterAdvertisesCopyCommand(t *testing.T) {
 		t.Fatalf("output footer should retain output copying, got:\n%s", plain)
 	}
 }
+
+func TestNonAdminModeShowsElevationWarning(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.adminMode = false
+
+	plain := stripAnsiTest(m.View())
+	if !strings.Contains(plain, "Administrator mode required") {
+		t.Fatalf("non-admin view should warn about elevation, got:\n%s", plain)
+	}
+}
