@@ -1,33 +1,26 @@
 # Phase 1 Windows Packaging Smoke ISO
 
 This media is a repository-independent test bundle for the Phase 1 Windows x64
-packaging smoke matrix. It contains the source and packaging inputs under
-`repository\`, the VM runner at `RUN-TESTS.ps1`, and a writable `results\`
-working-tree `.git` directory.
+packaging smoke matrix. It contains prebuilt artifacts under `artifacts\`, the
+VM runner at `RUN-TESTS.ps1`, and a writable `results\` directory. The smoke
+run does not use `.git`, repository access, Go, .NET, or WiX.
 
 ## VM Prerequisites
 
 - Disposable Windows 10 or Windows 11 x64 VM with a clean snapshot.
 - UAC enabled and a local administrator account for setup only.
 - At least 4 GB RAM, 10 GB free disk, and PowerShell 5.1 or PowerShell 7.
-- Internet access is not required when the files listed in `tools\` are staged.
-- The exact dependency staging contract is in `tools\dependencies.json`.
+- Internet access is not required: all release payloads and verification files
+  are staged before the VM is disconnected.
 
-The bundle generator copies any files supplied with `-DependencyRoot` into
-`tools\`. If the directory is empty, stage the pinned installers/packages before
-the VM is disconnected. `sha256` values marked `TO_BE_STAGED` must be replaced
-with hashes from the trusted download process; the runner does not silently
-trust unverified files.
+`-DependencyRoot` is optional developer setup input and is not read by the
+standard-user runner.
 
 ## Setup And Run
 
 1. Mount or extract the bundle without copying it into the application install
    directory.
-2. As the VM administrator, install Go 1.24.5 from the staged MSI, or install
-   it from the documented official source. Install the WiX v4.0.5 dotnet tool
-   and `WixToolset.Bal.wixext` from the staged NuGet packages or an approved
-   offline package source. Do not use a different WiX version.
-3. Create a fresh local standard user with UAC enabled. Sign in as that user;
+2. Create a fresh local standard user with UAC enabled. Sign in as that user;
    do not use `Run as administrator` for the smoke run.
 4. Open PowerShell in the bundle root and run:
 
@@ -36,17 +29,15 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\RUN-TESTS.ps1 -Tag v1.2.3
 ```
 
-The script builds the portable, MSI, and bootstrapper artifacts from
-`repository\`, validates the portable layout, then launches the MSI and
-bootstrapper smoke tests as the current standard user. It stops on missing or
-wrong-version tools and records `SMOKE_RESULT=passed` only after both tests
-complete.
+The script validates artifact names, checksums, metadata, and portable layout,
+then launches the portable, MSI, and bootstrapper smoke tests as the current
+standard user. Missing artifacts fail early with one concise message.
 
 ## Expected Evidence
 
 `results\` contains the generated artifacts and:
 
-- `msi-result.txt` and `bootstrapper-result.txt` with command output.
+- `portable-result.txt`, `msi-result.txt`, and `bootstrapper-result.txt` with command output.
 - `wslc-tui-msi-smoke.log` and `wslc-tui-bootstrapper-smoke.log`.
 - `result-marker.txt` containing `SMOKE_RESULT=passed`.
 - `bundle-manifest.json` containing SHA-256 hashes for the staged inputs.
@@ -69,3 +60,14 @@ Compress-Archive -Path .\results\* -DestinationPath "$out.zip" -Force
 
 Do not include user profiles, registry hives, credentials, or unrelated VM
 files in the exported evidence.
+
+## Build Artifacts Separately
+
+Maintainers build the release artifacts on a developer/build VM, then pass that
+output directory to the bundle generator. The standard-user runner never
+installs or resolves developer tools:
+
+```powershell
+./packaging/build.ps1 -Tag v1.2.3 -Channel Beta -Output ./dist
+./scripts/build-phase1-test-iso.ps1 -Tag v1.2.3 -ArtifactDirectory ./dist -OutputDirectory ./artifacts
+```

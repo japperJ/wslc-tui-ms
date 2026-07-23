@@ -9,9 +9,6 @@ $ErrorActionPreference = 'Stop'
 $missing = [System.Collections.Generic.List[string]]::new()
 if (-not $env:windir) { $missing.Add('Windows x64 test host; run on a Windows 10/11 VM.') }
 if (-not [Environment]::Is64BitOperatingSystem) { $missing.Add('Windows x64 packaging tools and operating system.') }
-$wix = Get-Command wix -ErrorAction SilentlyContinue
-if (-not $wix) { $missing.Add('WiX Toolset v4.0.5; install with dotnet tool install --global wix --version 4.0.5.') }
-elseif ((& wix --version 2>$null) -notmatch '4\.0\.5') { $missing.Add('pinned WiX Toolset v4.0.5; the active wix command has a different version.') }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]$identity
 if ($env:windir -and $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { $missing.Add('fresh standard-user account with a medium-integrity token; do not run as administrator.') }

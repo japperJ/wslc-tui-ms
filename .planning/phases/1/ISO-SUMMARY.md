@@ -3,9 +3,9 @@
 ## Files
 
 - `scripts/build-phase1-test-iso.ps1` creates a new tagged staging directory and, when `oscdimg.exe` is available, a new ISO. It refuses to overwrite either output.
-- `packaging/tests/RUN-TESTS.ps1` is the VM entry point. It requires Windows x64, UAC, a non-admin account, Go 1.24.5, and WiX 4.0.5 before building and running both smoke tests.
+- `packaging/tests/RUN-TESTS.ps1` is the VM entry point. It derives the bundle root from `$PSScriptRoot`, validates prebuilt artifacts under `artifacts\`, and requires only Windows x64, UAC, a non-admin account, and PowerShell.
 - `packaging/iso/README.md` documents VM prerequisites, admin-only setup, standard-user execution, evidence, and export.
-- `packaging/iso/dependencies.json` documents the exact staged Go MSI and WiX v4.0.5 packages. `TO_BE_STAGED` hashes must be filled during trusted dependency acquisition.
+- `packaging/iso/dependencies.json` records that the standard-user smoke run has no developer-tool dependency.
 - `docs/releases.md` and `README.md` link the workflow.
 
 ## Commands
@@ -15,6 +15,10 @@ Create a staging bundle:
 ```powershell
 pwsh -NoProfile -File ./scripts/build-phase1-test-iso.ps1 -Tag v1.2.3 -OutputDirectory ./artifacts
 ```
+
+For a runnable bundle, build artifacts separately and pass them with
+`-ArtifactDirectory ./dist`. Without that option the output is source-only and
+the runner fails early with `Missing packaged artifacts`.
 
 Create an ISO with a Windows ADK ISO authoring tool:
 
@@ -48,7 +52,7 @@ manifest-backed bundle.
 
 - The repository does not contain redistributable Go/WiX installers. Supply
   them through `-DependencyRoot` and verify hashes before disconnecting the VM.
-- Installing Go, .NET, the WiX dotnet tool, and the WiX Bal extension is an
-  administrator setup step; the smoke run itself must be standard-user.
+- Go, .NET, and WiX are administrator/developer build-VM prerequisites only;
+  the final standard-user setup test does not install or resolve them.
 - No credentials, tokens, signing certificates, or GitHub access are needed
   or copied. The bundle does not fetch repository content at runtime.

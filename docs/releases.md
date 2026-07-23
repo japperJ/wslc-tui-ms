@@ -14,7 +14,8 @@ The checksum manifest uses SHA-256 and covers the MSI, bootstrapper, portable ZI
 
 ## Local Build
 
-Run on Windows with Go 1.24.5 and WiX Toolset v4 installed:
+Build artifacts on a Windows maintainer/build VM with Go 1.24.5 and WiX
+Toolset v4 installed:
 
 ```powershell
 ./packaging/build.ps1 -Tag v1.2.3 -Channel Stable -Output ./dist
@@ -27,24 +28,29 @@ WiX v4.0.5 is required for MSI and bootstrapper output. The build script still c
 
 Use a clean Windows 10/11 x64 snapshot with UAC enabled. Build as the VM administrator, then run `packaging/tests/smoke-msi.ps1` as a fresh standard user with a medium-integrity token and writable `%LOCALAPPDATA%`. The test captures an MSI log and verifies the exact per-user path, HKCU values, installer metadata, and absence of HKLM, service, task, or Program Files state. Run the bootstrapper from the same standard account and record its result in the release evidence; its only package payload must be the generated MSI.
 
-The default smoke preflight requires pinned WiX v4.0.5, Windows x64 tools, UAC, and a non-admin standard-user context. Missing prerequisites emit `SMOKE_RESULT=blocked` and fail release verification. The `verify-installer-vm` workflow job runs on the disposable `clean-vm` runner label and publishes MSI/bootstrapper logs and result markers under the `windows-installer-smoke-*` evidence artifact.
+The ISO smoke runner requires only Windows x64, UAC, a non-admin standard-user
+context, PowerShell, and prebuilt artifacts. It does not require Go, .NET, WiX,
+`.git`, repository access, or internet. The separate release build job owns the
+pinned Go/WiX prerequisites.
 
 No signing certificate or signing secret is needed for the initial unsigned release. `SIGNING_COMMAND` is an optional future boundary in the workflow and is skipped when unset. Unsigned artifacts can trigger a Windows SmartScreen unknown-publisher prompt.
 
 ## Offline Phase 1 VM Bundle
 
-Build a repository-independent test bundle without touching the existing ISO:
+Build a repository-independent test bundle from prebuilt artifacts without
+touching the existing ISO:
 
 ```powershell
-./scripts/build-phase1-test-iso.ps1 -Tag v1.2.3 -OutputDirectory ./artifacts -DependencyRoot ./staged-tools
+./packaging/build.ps1 -Tag v1.2.3 -Channel Beta -Output ./dist
+./scripts/build-phase1-test-iso.ps1 -Tag v1.2.3 -ArtifactDirectory ./dist -OutputDirectory ./artifacts
 ```
 
 The script creates `wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso` when
 `oscdimg.exe` is installed, or a complete staging directory when it is not.
 Pass `-OscdimgPath` with the Windows ADK `oscdimg.exe` to make the ISO later.
-The bundle contains `RUN-TESTS.ps1`, the source/build inputs, the smoke scripts,
-and the dependency staging contract. See the bundle README for clean VM setup,
-standard-user requirements, evidence files, and result export instructions.
+The bundle contains `RUN-TESTS.ps1`, prebuilt payloads, smoke scripts, and
+checksums/metadata. Omitting `-ArtifactDirectory` creates a clearly labeled
+source-only bundle that fails early with a missing-artifacts message.
 
 ## Channel Promotion
 

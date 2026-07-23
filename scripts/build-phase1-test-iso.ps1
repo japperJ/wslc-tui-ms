@@ -2,8 +2,10 @@
 param(
   [Parameter(Mandatory = $true)][string]$Tag,
   [string]$OutputDirectory = (Join-Path (Get-Location) 'artifacts'),
+  [string]$ArtifactDirectory,
   [string]$DependencyRoot,
-  [string]$OscdimgPath
+  [string]$OscdimgPath,
+  [switch]$SkipIso
 )
 $ErrorActionPreference = 'Stop'
 if ($Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') { throw "Tag must be a SemVer tag: $Tag" }
@@ -13,7 +15,7 @@ $bundle = Join-Path $OutputDirectory $bundleName
 $iso = Join-Path $OutputDirectory "$bundleName.iso"
 if (Test-Path $iso) { throw "Refusing to overwrite existing ISO: $iso" }
 if (Test-Path $bundle) { throw "Refusing to overwrite existing staging directory: $bundle" }
-New-Item -ItemType Directory -Force -Path $bundle, (Join-Path $bundle 'repository'), (Join-Path $bundle 'tools') | Out-Null
+New-Item -ItemType Directory -Force -Path $bundle, (Join-Path $bundle 'repository'), (Join-Path $bundle 'tools'), (Join-Path $bundle 'artifacts'), (Join-Path $bundle 'tests') | Out-Null
 
 function Copy-RepoItem([string]$RelativePath) {
   $source = Join-Path $repo $RelativePath
@@ -82,12 +84,56 @@ Remove-Item (Join-Path $bundle 'repository\packaging\tests\node_modules') -Recur
 Remove-Item (Join-Path $bundle 'repository\packaging\tests\*.log') -Force -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $repo 'packaging\iso\README.md') (Join-Path $bundle 'README.md') -Force
 Copy-Item (Join-Path $repo 'packaging\iso\dependencies.json') (Join-Path $bundle 'tools\dependencies.json') -Force
+Copy-Item (Join-Path $repo 'packaging\tests\RUN-TESTS.ps1') (Join-Path $bundle 'RUN-TESTS.ps1') -Force
+foreach ($test in @('smoke-portable.ps1', 'smoke-msi.ps1', 'smoke-bootstrapper.ps1')) {
+  Copy-Item (Join-Path $repo "packaging\tests\$test") (Join-Path $bundle "tests\$test") -Force
+}
+if ($ArtifactDirectory) {
+  if (-not (Test-Path $ArtifactDirectory -PathType Container)) { throw "Artifact directory is not a directory: $ArtifactDirectory" }
+  $artifactNames = @(
+    "wslc-tui-$Tag-windows-amd64.msi",
+    "wslc-tui-$Tag-windows-amd64.exe",
+    "wslc-tui-$Tag-windows-amd64-portable.zip",
+    'update-policy.json'
+  )
+  foreach ($name in $artifactNames) {
+    $source = Join-Path $ArtifactDirectory $name
+    if (-not (Test-Path $source -PathType Leaf)) { throw "Required prebuilt artifact is missing: $name" }
+    Copy-Item $source (Join-Path $bundle "artifacts\$name") -Force
+  }
+  $checksumName = "wslc-tui-$Tag-checksums.json"
+  $checksumSource = Join-Path $ArtifactDirectory $checksumName
+  if (Test-Path $checksumSource -PathType Leaf) {
+    Copy-Item $checksumSource (Join-Path $bundle "artifacts\$checksumName") -Force
+  } else {
+    $assets = foreach ($name in $artifactNames) {
+      $file = Join-Path $bundle "artifacts\$name"
+      [ordered]@{ name = $name; sizeBytes = (Get-Item $file).Length; sha256 = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant() }
+    }
+    [ordered]@{ schemaVersion = 1; releaseTag = $Tag; algorithm = 'sha256'; assets = @($assets) } |
+      ConvertTo-Json -Depth 5 | Set-Content (Join-Path $bundle "artifacts\$checksumName") -Encoding utf8NoBOM
+  }
+  $metadataName = "wslc-tui-$Tag-metadata.json"
+  $metadataSource = Join-Path $ArtifactDirectory $metadataName
+  if (Test-Path $metadataSource -PathType Leaf) {
+    Copy-Item $metadataSource (Join-Path $bundle "artifacts\$metadataName") -Force
+  } else {
+    $metadata = [ordered]@{
+      schemaVersion = 1
+      releaseTag = $Tag
+      assets = @($artifactNames + $checksumName)
+      source = 'prebuilt-artifact-directory'
+    }
+    $metadata | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $bundle "artifacts\$metadataName") -Encoding utf8NoBOM
+  }
+} else {
+  Write-Warning 'SOURCE-ONLY BUNDLE: no -ArtifactDirectory supplied; RUN-TESTS.ps1 will fail until prebuilt artifacts are staged.'
+}
 if ($DependencyRoot) {
   if (-not (Test-Path $DependencyRoot -PathType Container)) { throw "Dependency root is not a directory: $DependencyRoot" }
   Copy-Item (Join-Path $DependencyRoot '*') (Join-Path $bundle 'tools') -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $bundle 'results') | Out-Null
-Copy-Item (Join-Path $repo 'packaging\tests\RUN-TESTS.ps1') (Join-Path $bundle 'RUN-TESTS.ps1') -Force
 
 $manifest = [ordered]@{ schemaVersion = 1; tag = $Tag; files = @() }
 foreach ($file in Get-ChildItem $bundle -File -Recurse | Where-Object { $_.Name -ne 'bundle-manifest.json' } | Sort-Object FullName) {
@@ -96,6 +142,10 @@ foreach ($file in Get-ChildItem $bundle -File -Recurse | Where-Object { $_.Name 
 }
 $manifest | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $bundle 'bundle-manifest.json') -Encoding utf8NoBOM
 
+if ($SkipIso) {
+  Write-Output "BUNDLE=$bundle"
+  return
+}
 if (-not $OscdimgPath) {
   $command = Get-Command oscdimg.exe -ErrorAction SilentlyContinue
   if ($command) { $OscdimgPath = $command.Source }
