@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <Bundle Name="WSLC TUI" Version="$(var.ProductVersion)"
+          Manufacturer="japperJ" UpgradeCode="B83DA2B6-0D4B-4B6B-97AC-5A7E5D0EF1D3">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication LicenseUrl="" Theme="hyperlinkLicense" />
+    </BootstrapperApplication>
+    <Chain>
+      <MsiPackage SourceFile="$(var.MsiPath)" DisplayInternalUI="no" />
+    </Chain>
+  </Bundle>
+</Wix>

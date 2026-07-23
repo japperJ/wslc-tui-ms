@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/japperJ/wslc-tui-ms/main/packaging/update-policy.schema.json",
+  "title": "WSLC TUI update policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "minimumSupportedVersion"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "minimumSupportedVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "message": { "type": "string" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

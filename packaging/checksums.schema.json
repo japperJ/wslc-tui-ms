@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/japperJ/wslc-tui-ms/main/packaging/checksums.schema.json",
+  "title": "WSLC TUI release checksums",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "releaseTag", "algorithm", "assets"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "releaseTag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "algorithm": { "const": "sha256" },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "sizeBytes", "sha256"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "sizeBytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  }
+}

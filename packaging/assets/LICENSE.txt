@@ -1,0 +1,2 @@
+WSLC TUI is distributed without a declared project license at this time.
+See the repository for current licensing information before redistribution.

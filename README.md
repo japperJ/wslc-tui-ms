@@ -59,6 +59,20 @@ go build -o wslc-tui-ms.exe .
 
 The generated executable can be placed in a directory on your `PATH` if you want to launch it from anywhere.
 
+Release binaries expose their embedded version and distribution metadata:
+
+```powershell
+.\wslc-tui-ms.exe --version
+```
+
+## Windows Releases
+
+Maintainers publish Windows x64 MSI, EXE/bootstrapper, and portable ZIP assets from SemVer tags such as `v1.2.3`. The MSI and bootstrapper install per-user beneath `%LOCALAPPDATA%\wslc-tui-ms` and register only `HKCU\Software\japperJ\wslc-tui-ms`; they do not modify `PATH`, install services, or write machine-wide state. Portable ZIPs contain only `wslc-tui.exe`, `README.txt`, and `LICENSE.txt`.
+
+Release policy is the version-controlled [`update-policy.json`](update-policy.json), consumed publicly at `https://raw.githubusercontent.com/japperJ/wslc-tui-ms/main/update-policy.json`. GitHub's release `prerelease` flag is the channel source of truth: `true` is Beta and `false` is Stable. Promotion changes release state only and does not rebuild assets. Initial artifacts are unsigned, so Windows SmartScreen may show an unknown-publisher warning; signing is an optional future workflow hook.
+
+The maintainer packaging procedure and non-admin VM smoke tests are documented in [`docs/releases.md`](docs/releases.md).
+
 ## Basic Workflow
 
 1. Start the application with `go run .` or the built executable.

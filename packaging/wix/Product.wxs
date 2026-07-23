@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="WSLC TUI" Manufacturer="japperJ" Version="$(var.ProductVersion)"
+           UpgradeCode="E79E2A68-1CE9-4C2A-A1B6-2AA8B6B9DCA1" Scope="perUser">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of WSLC TUI is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="wslc-tui-ms" />
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="WSLC TUI" Level="1">
+      <ComponentGroupRef Id="ApplicationFiles" />
+    </Feature>
+
+    <Fragment>
+      <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
+        <Component Id="ApplicationExecutable" Guid="*">
+          <File Id="ApplicationExecutableFile" Source="$(var.ApplicationExecutable)" KeyPath="yes" />
+          <RegistryKey Root="HKCU" Key="Software\japperJ\wslc-tui-ms" Action="createAndRemoveOnUninstall">
+            <RegistryValue Name="InstallRoot" Type="string" Value="[INSTALLFOLDER]" />
+            <RegistryValue Name="Version" Type="string" Value="$(var.ProductVersion)" />
+            <RegistryValue Name="Distribution" Type="string" Value="installer" />
+          </RegistryKey>
+        </Component>
+      </ComponentGroup>
+    </Fragment>
+  </Package>
+</Wix>

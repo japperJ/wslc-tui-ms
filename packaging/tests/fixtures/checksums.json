@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "releaseTag": "v1.2.3",
+  "algorithm": "sha256",
+  "assets": [
+    { "name": "wslc-tui-v1.2.3-windows-amd64.msi", "sizeBytes": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+    { "name": "wslc-tui-v1.2.3-windows-amd64.exe", "sizeBytes": 1, "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+    { "name": "wslc-tui-v1.2.3-windows-amd64-portable.zip", "sizeBytes": 1, "sha256": "2222222222222222222222222222222222222222222222222222222222222222" },
+    { "name": "update-policy.json", "sizeBytes": 1, "sha256": "3333333333333333333333333333333333333333333333333333333333333333" }
+  ]
+}
