@@ -3,7 +3,7 @@
 ## Files
 
 - `scripts/build-phase1-test-iso.ps1` creates a new tagged staging directory and, when `oscdimg.exe` is available, a new ISO. It refuses to overwrite either output.
-- `packaging/tests/RUN-TESTS.ps1` is the VM entry point. It derives the bundle root from `$PSScriptRoot`, infers a single release tag from tagged metadata/checksum files when `-Tag` is omitted, validates prebuilt artifacts under `artifacts\`, and requires only Windows x64, UAC, a non-admin account, and PowerShell.
+- `packaging/tests/RUN-TESTS.ps1` is the VM entry point. It derives the bundle root from `$PSScriptRoot`, infers a single release tag from tagged metadata/checksum files when `-Tag` is omitted, validates prebuilt artifacts under `artifacts\`, and requires only Windows x64, UAC, a non-admin account, and PowerShell. Child smoke scripts run through the current host under both Windows PowerShell 5.1 and PowerShell 7.
 - `packaging/iso/README.md` documents VM prerequisites, admin-only setup, standard-user execution, evidence, and export.
 - `packaging/iso/dependencies.json` records that the standard-user smoke run has no developer-tool dependency.
 - `docs/releases.md` and `README.md` link the workflow.
@@ -16,7 +16,7 @@ Create a runnable staging bundle:
 pwsh -NoProfile -File ./scripts/build-phase1-test-iso.ps1 -Tag v1.2.3 -OutputDirectory ./artifacts
 ```
 
-The generated runnable bundle is under `artifacts/phase1-runnable-v1.2.3-checksum-fix/` and
+The generated runnable bundle is under `artifacts/phase1-runnable-v1.2.3-checksum-fix-host-fix/` and
 contains the prebuilt MSI, bootstrapper, portable ZIP, checksums, and metadata.
 
 Create an ISO with a Windows ADK ISO authoring tool:
@@ -44,12 +44,12 @@ The runnable tagged build was run on the current Windows host with
 `IMAPI2FS.MsftFileSystemImage` fallback and produced a mountable ISO with a
 manifest-backed bundle and prebuilt packaging artifacts.
 
-- Exact ISO: `C:\REP\wslc-tui-ms\artifacts\phase1-runnable-v1.2.3-checksum-fix\wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
+- Exact ISO: `C:\REP\wslc-tui-ms\artifacts\phase1-runnable-v1.2.3-checksum-fix-host-fix\wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
 - Size: `6,750,208` bytes
-- SHA-256: `D6A4700AF2302BE80C918C5DD06578199638C4E2E7B79A53AAD85CBA6F2B769B`
+- SHA-256: `56311EAC22CC3EC287C6EDABFB3DD1F11FC1559B3A07F155C1D85064F27D38CE`
 - `Mount-DiskImage` attached it as `E:\`; Windows reported filesystem `UDF`.
 - `E:\README.md` was read successfully (`3,045` bytes).
-- `E:\RUN-TESTS.ps1` was read successfully and contains the payload-only checksum validation.
+- `E:\RUN-TESTS.ps1` was read successfully and contains the payload-only checksum validation plus current-host child-script selection.
 - `E:\bundle-manifest.json` was read successfully (`10,846` bytes).
 - `Dismount-DiskImage` completed successfully.
 - The existing `wslc-tui-ms.iso` was not modified. The generated ISO is intentionally not committed.

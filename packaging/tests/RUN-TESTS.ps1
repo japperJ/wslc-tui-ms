@@ -68,13 +68,15 @@ $installRoot = Join-Path $env:LOCALAPPDATA 'wslc-tui-ms'
 $msi = Join-Path $artifacts "wslc-tui-$Tag-windows-amd64.msi"
 $bootstrapper = Join-Path $artifacts "wslc-tui-$Tag-windows-amd64.exe"
 $portable = Join-Path $artifacts "wslc-tui-$Tag-windows-amd64-portable.zip"
-& pwsh -NoProfile -File (Join-Path $smokeRoot 'smoke-portable.ps1') -Portable $portable -Tag $Tag -ExtractRoot (Join-Path $results 'portable') *>&1 |
+$hostExecutable = Join-Path $PSHOME $(if ($PSEdition -eq 'Core') { 'pwsh.exe' } else { 'powershell.exe' })
+if (-not (Test-Path $hostExecutable -PathType Leaf)) { throw "Current PowerShell host executable was not found: $hostExecutable" }
+& $hostExecutable -NoProfile -File (Join-Path $smokeRoot 'smoke-portable.ps1') -Portable $portable -Tag $Tag -ExtractRoot (Join-Path $results 'portable') *>&1 |
   Tee-Object (Join-Path $results 'portable-result.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Portable smoke test failed.' }
-& pwsh -NoProfile -File (Join-Path $smokeRoot 'smoke-msi.ps1') -Msi $msi -Bootstrapper $bootstrapper -InstallRoot $installRoot *>&1 |
+& $hostExecutable -NoProfile -File (Join-Path $smokeRoot 'smoke-msi.ps1') -Msi $msi -Bootstrapper $bootstrapper -InstallRoot $installRoot *>&1 |
   Tee-Object (Join-Path $results 'msi-result.txt')
 if ($LASTEXITCODE -ne 0) { throw 'MSI smoke test failed.' }
-& pwsh -NoProfile -File (Join-Path $smokeRoot 'smoke-bootstrapper.ps1') -Bootstrapper $bootstrapper -InstallRoot $installRoot *>&1 |
+& $hostExecutable -NoProfile -File (Join-Path $smokeRoot 'smoke-bootstrapper.ps1') -Bootstrapper $bootstrapper -InstallRoot $installRoot *>&1 |
   Tee-Object (Join-Path $results 'bootstrapper-result.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Bootstrapper smoke test failed.' }
 

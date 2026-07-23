@@ -22,6 +22,21 @@ if ($runner -notmatch '\$metadataAssets\s*=') { throw 'ISO runner must define th
 if ($runner -notmatch '\$metadataAssets\s*\|\s*Sort-Object') {
   throw 'ISO runner metadata validation must use the canonical metadata asset list.'
 }
+if ($runner -match '&\s*pwsh\b') {
+  throw 'ISO runner must not require the PowerShell 7 pwsh executable.'
+}
+if ($runner -notmatch '\$hostExecutable\s*=') {
+  throw 'ISO runner must select the current PowerShell host executable.'
+}
+if ($runner -notmatch '\$PSHOME') {
+  throw 'ISO runner host selection must use the current PowerShell installation path.'
+}
+if ($runner -notmatch '\$PSEdition\s*-eq\s*''Core''') {
+  throw 'ISO runner host selection must distinguish PowerShell Core from Windows PowerShell.'
+}
+if ($runner -notmatch 'powershell\.exe') {
+  throw 'ISO runner must support the Windows PowerShell executable.'
+}
 
 $temp = Join-Path ([IO.Path]::GetTempPath()) "wslc-iso-test-$PID"
 Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
