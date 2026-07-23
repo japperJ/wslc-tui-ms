@@ -103,6 +103,30 @@ func TestFocusedCommandSearchUStartsManualUpdateCheck(t *testing.T) {
 	}
 }
 
+func TestFocusedCommandSearchUppercaseUStartsManualUpdateCheck(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))}
+	inputBefore := m.inputValue
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'U'}})
+	m = updated.(model)
+	if cmd == nil || !m.updateChecking {
+		t.Fatal("focused U should start a manual update check")
+	}
+	if m.inputValue != inputBefore {
+		t.Fatalf("focused U changed search input to %q", m.inputValue)
+	}
+}
+
+func TestUpdateChannelAcceptsUppercaseC(t *testing.T) {
+	m := appWithDecision(t)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
+	m = updated.(model)
+	if m.updateChannel != update.Beta {
+		t.Fatalf("uppercase C channel = %q, want %q", m.updateChannel, update.Beta)
+	}
+}
+
 func TestInitialUpdateChannelUsesBetaBuildWhenUnconfigured(t *testing.T) {
 	old := buildinfo.Channel
 	buildinfo.Channel = "Beta"

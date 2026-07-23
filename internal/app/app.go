@@ -825,7 +825,7 @@ func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.updateConfirm = false
 	case "r":
 		return m, m.startUpdateCheck(true)
-	case "c":
+	case "c", "C":
 		if m.updateChannel == update.Stable {
 			m.updateChannel = update.Beta
 		} else {
@@ -861,7 +861,7 @@ func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.inputFocused || m.textInput.Focused() {
 		switch msg.String() {
-		case "u":
+		case "u", "U":
 			return m, m.startUpdateCheck(true)
 		case "esc":
 			m.textInput.Blur()
@@ -927,7 +927,7 @@ func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l":
 		m.activeTab = 1
 		m.currentView = viewLearn
-	case "u":
+	case "u", "U":
 		return m, m.startUpdateCheck(true)
 	case "1", "2", "3", "4", "5", "6", "7":
 		idx := int(msg.String()[0] - '1')
