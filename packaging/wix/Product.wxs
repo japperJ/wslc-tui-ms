@@ -16,7 +16,7 @@
     <Fragment>
       <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
         <Component Id="ApplicationExecutable" Guid="*">
-          <File Id="ApplicationExecutableFile" Source="$(var.ApplicationExecutable)" KeyPath="yes" />
+          <File Id="ApplicationExecutableFile" Name="wslc-tui.exe" Source="$(var.ApplicationExecutable)" KeyPath="yes" />
           <RegistryKey Root="HKCU" Key="Software\japperJ\wslc-tui-ms" Action="createAndRemoveOnUninstall">
             <RegistryValue Name="InstallRoot" Type="string" Value="[INSTALLFOLDER]" />
             <RegistryValue Name="Version" Type="string" Value="$(var.ProductVersion)" />

@@ -67,7 +67,7 @@ jobs:
           [ordered]@{ schemaVersion = 1; releaseTag = $tag; algorithm = 'sha256'; assets = @($assets) } |
             ConvertTo-Json -Depth 5 | Set-Content ./dist/"wslc-tui-$tag-checksums.json" -Encoding utf8NoBOM
           ./packaging/tests/test-package.ps1 -Dist ./dist -Tag $tag
-          ./packaging/tests/test-contracts.ps1
+          ./packaging/tests/test-contracts.ps1 -ChecksumManifest ./dist/"wslc-tui-$tag-checksums.json"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
@@ -80,6 +80,51 @@ jobs:
             dist/*checksums.json
             update-policy.json
 
+  verify-installer-vm:
+    needs: build-release
+    # This label must point at a disposable Windows 10/11 x64 snapshot. The
+    # runner is restored before each job and uses a fresh standard-user account.
+    runs-on: [self-hosted, windows, x64, clean-vm]
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release-${{ github.ref_name }}
+          path: dist
+      - name: Run standard-user installer smoke matrix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path verification-evidence | Out-Null
+          $tag = '${{ github.ref_name }}'
+          $installRoot = Join-Path $env:LOCALAPPDATA 'wslc-tui-ms'
+          & ./packaging/tests/smoke-msi.ps1 -Msi "./dist/wslc-tui-$tag-windows-amd64.msi" -Bootstrapper "./dist/wslc-tui-$tag-windows-amd64.exe" -InstallRoot $installRoot *>&1 | Tee-Object verification-evidence/msi-result.txt
+          if ($LASTEXITCODE -ne 0) { throw 'MSI smoke verification failed.' }
+          & ./packaging/tests/smoke-bootstrapper.ps1 -Bootstrapper "./dist/wslc-tui-$tag-windows-amd64.exe" -InstallRoot $installRoot *>&1 | Tee-Object verification-evidence/bootstrapper-result.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Bootstrapper smoke verification failed.' }
+          Copy-Item (Join-Path $env:TEMP 'wslc-tui-msi-smoke.log') verification-evidence/ -ErrorAction Stop
+          Copy-Item (Join-Path $env:TEMP 'wslc-tui-bootstrapper-smoke.log') verification-evidence/ -ErrorAction Stop
+          'SMOKE_RESULT=passed' | Set-Content verification-evidence/result-marker.txt
+      - name: Publish installer smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-smoke-${{ github.ref_name }}
+          path: verification-evidence
+
+  create-release:
+    needs: [build-release, verify-installer-vm]
+    runs-on: windows-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release-${{ github.ref_name }}
+          path: dist
       - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
