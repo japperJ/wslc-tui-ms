@@ -10,10 +10,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"wslc-tui-ms/internal/buildinfo"
 	"wslc-tui-ms/internal/commands"
 	"wslc-tui-ms/internal/data"
 	"wslc-tui-ms/internal/platform"
+	"wslc-tui-ms/internal/settings"
 	"wslc-tui-ms/internal/ui"
+	"wslc-tui-ms/internal/update"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -31,6 +34,7 @@ const (
 	viewConfirm
 	viewOutput
 	viewLearn
+	viewUpdate
 )
 
 const (
@@ -204,6 +208,16 @@ type model struct {
 	// Clickable regions (header tabs, footer hints).
 	// Pointer so mutations during value-receiver View()/render calls persist.
 	clickRegions *[]clickRegion
+
+	// Update state. The service is injectable so startup checks remain testable
+	// and never couple the TUI to a network implementation.
+	updateService  update.Service
+	updateChannel  update.Channel
+	updateDecision *update.Decision
+	updateError    error
+	updateChecking bool
+	updateConfirm  bool
+	updateHandoff  bool
 }
 
 type clickRegion struct {
@@ -218,6 +232,10 @@ type execDoneMsg struct {
 }
 
 type splashTickMsg struct{}
+type updateResultMsg struct {
+	decision update.Decision
+	err      error
+}
 
 func NewModelForTest(width, height int) model {
 	m := NewModel()
@@ -254,6 +272,13 @@ func NewModel() model {
 		initialCmds = append(initialCmds, allCmds[cat]...)
 	}
 
+	path, _ := settings.DefaultPath()
+	store := settings.NewStore(path)
+	state, _ := store.Load()
+	channel := update.Channel(state.Channel)
+	if channel != update.Stable && channel != update.Beta {
+		channel = update.Stable
+	}
 	m := model{
 		currentView:    viewCommands,
 		adminMode:      platform.IsElevated(),
@@ -277,6 +302,8 @@ func NewModel() model {
 			"Sessions",
 			"System & Maintenance",
 		},
+		updateChannel: channel,
+		updateService: update.Service{Client: update.NewGitHubClient("japperJ", "wslc-tui-ms", nil), Store: store, Distribution: buildinfo.Distribution, CurrentVersion: buildinfo.Version},
 	}
 	m.clickRegions = &[]clickRegion{}
 	m.updateFiltered()
@@ -288,6 +315,7 @@ func (m model) Init() tea.Cmd {
 	if m.splashActive {
 		cmds = append(cmds, splashTick())
 	}
+	cmds = append(cmds, m.updateCheckCommand(false))
 	return tea.Batch(cmds...)
 }
 
@@ -330,6 +358,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.outputResult = &msg.result
 		m.setViewportOutput()
 		m.viewport.GotoTop()
+		return m, nil
+	case updateResultMsg:
+		m.updateChecking = false
+		m.updateError = msg.err
+		if msg.err == nil && (msg.decision.Available || msg.decision.Mandatory) {
+			m.updateDecision = &msg.decision
+			m.currentView = viewUpdate
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -550,6 +586,8 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleOutputKey(msg)
 	case viewLearn:
 		return m.handleLearnKey(msg)
+	case viewUpdate:
+		return m.handleUpdateKey(msg)
 	}
 
 	return m, nil
@@ -658,6 +696,10 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 		m.activeTab = 1
 		m.currentView = viewLearn
 		m.learnDetailActive = false
+	case "update":
+		m.currentView = viewUpdate
+	case "check-updates":
+		return m, m.startUpdateCheck(true)
 	case "help":
 		m.showTooltip = !m.showTooltip
 		if m.showTooltip {
@@ -756,6 +798,59 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) updateCheckCommand(manual bool) tea.Cmd {
+	return func() tea.Msg {
+		decision, err := m.updateService.Check(context.Background(), m.updateChannel, manual)
+		return updateResultMsg{decision: decision, err: err}
+	}
+}
+
+func (m *model) startUpdateCheck(manual bool) tea.Cmd {
+	m.updateChecking = true
+	m.updateError = nil
+	return m.updateCheckCommand(manual)
+}
+
+func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.currentView = viewCommands
+		m.updateConfirm = false
+	case "r":
+		return m, m.startUpdateCheck(true)
+	case "c":
+		if m.updateChannel == update.Stable {
+			m.updateChannel = update.Beta
+		} else {
+			m.updateChannel = update.Stable
+		}
+		state, err := m.updateService.Store.Load()
+		if err == nil {
+			state.Channel = settings.Channel(m.updateChannel)
+			_ = m.updateService.Store.Save(state)
+		}
+	case "l":
+		if m.updateDecision != nil && !m.updateDecision.Mandatory {
+			_ = m.updateService.Defer(m.updateDecision.Version)
+			m.updateDecision = nil
+			m.currentView = viewCommands
+		}
+	case "d":
+		if m.updateDecision != nil && m.updateDecision.Available {
+			m.updateConfirm = true
+		}
+	case "enter", "y":
+		if m.updateConfirm && m.updateDecision != nil {
+			m.updateConfirm = false
+			m.updateHandoff = true
+			m.currentView = viewUpdate
+		}
+	case "n":
+		m.updateConfirm = false
+	}
+	return m, nil
+}
+
 func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.inputFocused || m.textInput.Focused() {
 		switch msg.String() {
@@ -823,6 +918,8 @@ func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l":
 		m.activeTab = 1
 		m.currentView = viewLearn
+	case "u":
+		return m, m.startUpdateCheck(true)
 	case "1", "2", "3", "4", "5", "6", "7":
 		idx := int(msg.String()[0] - '1')
 		if idx < len(m.categories) {
@@ -1303,6 +1400,8 @@ func (m model) View() string {
 		b.WriteString(m.renderOutputView())
 	case viewLearn:
 		b.WriteString(m.renderLearnView())
+	case viewUpdate:
+		b.WriteString(m.renderUpdateView())
 	}
 	b.WriteString("\n")
 
@@ -1426,6 +1525,9 @@ func (m model) renderCommandsView() string {
 	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, " ", content)
 
 	var parts []string
+	if m.updateChecking || m.updateDecision != nil || m.updateError != nil {
+		parts = append(parts, m.renderUpdateBanner(), "")
+	}
 	parts = append(parts, mainContent)
 	parts = append(parts, "")
 	parts = append(parts, input)
@@ -1435,6 +1537,66 @@ func (m model) renderCommandsView() string {
 	}
 
 	return strings.Join(parts, "\n")
+}
+
+func (m model) renderUpdateBanner() string {
+	if m.updateChecking {
+		return ui.CardActiveStyle.Width(m.width - 2).Render("  Checking for updates in the background...")
+	}
+	if m.updateError != nil {
+		return ui.CardStyle.Width(m.width - 2).Render(ui.OutputErrorStyle.Render("  Update check failed: ") + m.updateError.Error() + "  [u] Retry")
+	}
+	if m.updateDecision != nil {
+		label := "Update available: " + m.updateDecision.Version + " (" + m.updateDecision.Channel + ")  [u] View notes"
+		if m.updateDecision.Mandatory {
+			label = "Required update: " + m.updateDecision.Version + "  [u] View notes"
+		}
+		return ui.CardActiveStyle.Width(m.width - 2).Render("  " + label)
+	}
+	return ""
+}
+
+func (m model) renderUpdateView() string {
+	_, contentHeight := m.calculateLayout()
+	var lines []string
+	channel := strings.Title(string(m.updateChannel))
+	if m.updateChecking {
+		lines = append(lines, "  "+ui.OutputJsonStringStyle.Render("⟳ Checking GitHub Releases..."), "")
+	}
+	if m.updateError != nil {
+		lines = append(lines, "  "+ui.OutputErrorStyle.Render("Update check failed: "+m.updateError.Error()), "")
+	}
+	if m.updateDecision == nil {
+		lines = append(lines, "  "+ui.CmdDescStyle.Render("No update is currently available."))
+	} else {
+		d := m.updateDecision
+		if d.Mandatory {
+			lines = append(lines, "  "+ui.PlaceholderWarnStyle.Render("⚠ REQUIRED UPDATE"))
+		} else {
+			lines = append(lines, "  "+ui.OutputSuccessStyle.Render("● UPDATE AVAILABLE"))
+		}
+		lines = append(lines, "", "  "+ui.SectionLabelStyle.Render("VERSION")+"  "+d.Version, "  "+ui.SectionLabelStyle.Render("CHANNEL")+"  "+channel, "  "+ui.SectionLabelStyle.Render("ASSET")+"  "+d.Asset.Name, "")
+		lines = append(lines, "  "+ui.SectionLabelStyle.Render("RELEASE NOTES"))
+		for _, note := range strings.Split(strings.TrimSpace(d.Notes), "\n") {
+			lines = append(lines, "  "+truncateString(note, m.width-6))
+		}
+		lines = append(lines, "")
+		if d.Mandatory {
+			lines = append(lines, "  "+ui.PlaceholderWarnStyle.Render("This update is required by the local support policy."))
+		} else if m.updateConfirm {
+			lines = append(lines, "  "+ui.PreviewExampleStyle.Render("Download and install "+d.Version+"? Enter/Y confirms; Esc/N cancels."))
+		} else if m.updateHandoff {
+			lines = append(lines, "  "+ui.OutputSuccessStyle.Render("Download and Install confirmed."), "  "+ui.CmdDescStyle.Render("Phase 3 handoff is ready; no download has started in Phase 2."))
+		} else {
+			lines = append(lines, "  "+ui.ActionHintKeyStyle.Render("d")+ui.ActionHintStyle.Render(" Download and Install    ")+ui.ActionHintKeyStyle.Render("l")+ui.ActionHintStyle.Render(" Later"))
+		}
+	}
+	lines = append(lines, "", "  "+ui.ActionHintKeyStyle.Render("c")+ui.ActionHintStyle.Render(" Channel: "+channel+"    ")+ui.ActionHintKeyStyle.Render("r")+ui.ActionHintStyle.Render(" Check now    ")+ui.ActionHintKeyStyle.Render("Esc")+ui.ActionHintStyle.Render(" Back"))
+	innerHeight := contentHeight - 2
+	for len(lines) < innerHeight {
+		lines = append(lines, "")
+	}
+	return ui.CardStyle.Width(m.width - 2).Render(ui.PreviewHeaderStyle.Render("  ▓  SOFTWARE UPDATE") + "\n" + lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func (m model) renderSidebar(width int) string {
@@ -2140,6 +2302,7 @@ func (m model) renderStatusBar(contentRowY int) string {
 			parts = append(parts, renderKeyHint("Tab", "Complete"))
 			parts = append(parts, renderKeyHint("/", "Search"))
 			parts = append(parts, renderKeyHint("l", "Learn"))
+			parts = append(parts, renderKeyHint("u", "Updates"))
 			parts = append(parts, renderKeyHint("1-7", "Category"))
 			parts = append(parts, renderKeyHint("?", "Help"))
 		}
@@ -2170,6 +2333,12 @@ func (m model) renderStatusBar(contentRowY int) string {
 	} else if m.currentView == viewLearn {
 		parts = append(parts, renderKeyHint("↑↓", "Navigate"))
 		parts = append(parts, renderKeyHint("Enter", "Open"))
+		parts = append(parts, renderKeyHint("Esc", "Back"))
+	} else if m.currentView == viewUpdate {
+		parts = append(parts, renderKeyHint("d", "Download and Install"))
+		parts = append(parts, renderKeyHint("l", "Later"))
+		parts = append(parts, renderKeyHint("c", "Channel"))
+		parts = append(parts, renderKeyHint("r", "Check now"))
 		parts = append(parts, renderKeyHint("Esc", "Back"))
 	}
 

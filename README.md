@@ -20,6 +20,7 @@ WSLC TUI gives command-line users a searchable command catalog, guided forms for
 - Pretty-print JSON output and provide scrollable output views.
 - Re-run the last command or copy the command/output to the clipboard.
 - Read built-in learning topics covering common WSLC workflows.
+- Check GitHub Releases without blocking the command browser, with Stable/Beta channels, release notes, deferral, and explicit download confirmation.
 - Support keyboard navigation and mouse clicks/wheel scrolling in supported terminals.
 
 ## Requirements
@@ -118,6 +119,18 @@ Unknown commands typed into the search field are passed through to the host shel
 | `c` | Copy the command |
 | `g` / `G` | Jump to the top/end of output |
 | Mouse wheel | Scroll forms and output |
+
+### Updates
+
+| Key | Action |
+| --- | --- |
+| `u` | Check for updates manually |
+| `d` | Review and confirm the selected update handoff |
+| `l` | Defer a non-mandatory update |
+| `c` | Switch between Stable and Beta |
+| `r` | Bypass the automatic 24-hour check cooldown |
+
+Automatic checks are silent when the network is unavailable and are throttled to one request per 24 hours. Update settings are stored in the operating system's per-user configuration directory. Phase 2 never downloads or installs a release; `Download and Install` only creates the metadata handoff consumed by Phase 3.
 
 ## Supported Command Areas
 
