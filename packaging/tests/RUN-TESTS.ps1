@@ -27,14 +27,17 @@ if ([string]::IsNullOrWhiteSpace($Tag)) {
   $Tag = $tags[0]
 }
 $results = Join-Path $root 'results'
-$required = @(
+$payloadAssets = @(
   "wslc-tui-$Tag-windows-amd64.msi",
   "wslc-tui-$Tag-windows-amd64.exe",
   "wslc-tui-$Tag-windows-amd64-portable.zip",
-  'update-policy.json',
-  "wslc-tui-$Tag-checksums.json",
-  "wslc-tui-$Tag-metadata.json"
+  'update-policy.json'
 )
+$checksumName = "wslc-tui-$Tag-checksums.json"
+$metadataName = "wslc-tui-$Tag-metadata.json"
+$metadataFiles = @($checksumName, $metadataName)
+$metadataAssets = @($payloadAssets + $checksumName)
+$required = @($payloadAssets + $metadataFiles)
 $missing = @($required | Where-Object { -not (Test-Path (Join-Path $artifacts $_)) })
 if ($missing.Count -gt 0) {
   throw "Missing packaged artifacts: $($missing -join ', '). Build the artifacts separately and rebuild this ISO."
@@ -48,13 +51,13 @@ if ($uac.EnableLUA -ne 1) { throw 'UAC must be enabled.' }
 
 Remove-Item $results -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $results | Out-Null
-$manifest = Get-Content (Join-Path $artifacts "wslc-tui-$Tag-checksums.json") -Raw | ConvertFrom-Json
+$manifest = Get-Content (Join-Path $artifacts $checksumName) -Raw | ConvertFrom-Json
 if ($manifest.releaseTag -ne $Tag -or $manifest.algorithm -ne 'sha256') { throw 'Packaged checksum metadata does not match the requested tag.' }
-$metadata = Get-Content (Join-Path $artifacts "wslc-tui-$Tag-metadata.json") -Raw | ConvertFrom-Json
-if ($metadata.releaseTag -ne $Tag -or (@($metadata.assets | Sort-Object) -join '|') -ne (@($required | Select-Object -First 5 | Sort-Object) -join '|')) {
+$metadata = Get-Content (Join-Path $artifacts $metadataName) -Raw | ConvertFrom-Json
+if ($metadata.releaseTag -ne $Tag -or (@($metadata.assets | Sort-Object) -join '|') -ne (@($metadataAssets | Sort-Object) -join '|')) {
   throw 'Packaged artifact metadata does not match the requested artifact names.'
 }
-foreach ($name in $required[0..4]) {
+foreach ($name in $payloadAssets) {
   $entry = @($manifest.assets | Where-Object name -eq $name)
   if ($entry.Count -ne 1) { throw "Checksum manifest does not cover exactly one $name artifact." }
   if ((Get-FileHash (Join-Path $artifacts $name) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $entry[0].sha256) { throw "Checksum mismatch: $name" }

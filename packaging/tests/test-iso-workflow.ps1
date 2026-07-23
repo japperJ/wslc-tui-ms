@@ -11,6 +11,17 @@ if ($runner -match '\[Parameter\(Mandatory\s*=\s*\$true\)\]\[string\]\$Tag') { t
 if ($runner -match 'Get-Command\s+go|Get-Command\s+wix|packaging\\build\.ps1') {
   throw 'ISO runner must not require developer packaging tools or build from source.'
 }
+if ($runner -notmatch '\$payloadAssets\s*=') { throw 'ISO runner must define the canonical payload asset list.' }
+if ($runner -notmatch 'foreach \(\$name in \$payloadAssets\)') {
+  throw 'ISO runner checksum validation must cover payload assets only.'
+}
+if ($runner -match 'foreach \(\$name in \$required') {
+  throw 'ISO runner must not checksum metadata files.'
+}
+if ($runner -notmatch '\$metadataAssets\s*=') { throw 'ISO runner must define the metadata asset list.' }
+if ($runner -notmatch '\$metadataAssets\s*\|\s*Sort-Object') {
+  throw 'ISO runner metadata validation must use the canonical metadata asset list.'
+}
 
 $temp = Join-Path ([IO.Path]::GetTempPath()) "wslc-iso-test-$PID"
 Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
