@@ -51,6 +51,12 @@ func (s Service) Check(ctx context.Context, channel Channel, manual bool) (Decis
 		}
 		return Decision{}, nil
 	}
+	if _, err := parseVersion(policy.MinimumSupportedVersion); err != nil {
+		if manual {
+			return Decision{}, fmt.Errorf("invalid minimum supported version: %w", err)
+		}
+		return Decision{}, nil
+	}
 	minimum := newer(policy.MinimumSupportedVersion, s.CurrentVersion)
 	selected, err := selectRelease(releases, channel)
 	if err != nil {

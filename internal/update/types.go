@@ -10,8 +10,10 @@ const (
 )
 
 type Asset struct {
-	Name, URL, SHA256 string
-	Size              int64
+	Name   string `json:"name"`
+	URL    string `json:"url,omitempty"`
+	SHA256 string `json:"sha256"`
+	Size   int64  `json:"sizeBytes"`
 }
 type Release struct {
 	Tag, Notes, URL string
