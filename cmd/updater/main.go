@@ -4,10 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"wslc-tui-ms/internal/update"
@@ -22,6 +24,12 @@ func main() {
 	handoff, err := update.ReadHandoff(*handoffPath)
 	if err != nil {
 		fatal(err.Error())
+	}
+	if runtime.GOOS == "windows" && os.Getenv("WSLC_TUI_UPDATER_CHILD") != "1" {
+		if err := handoffToTemp(*handoffPath); err != nil {
+			fatal(err.Error())
+		}
+		return
 	}
 	logPath := filepath.Join(filepath.Dir(handoff.ResultPath), "update.log")
 	logMessage(logPath, "handoff accepted: distribution=%s target=%s current=%s", handoff.Distribution, handoff.TargetVersion, handoff.CurrentExe)
@@ -73,4 +81,47 @@ func logMessage(path, format string, args ...any) {
 	}
 	defer f.Close()
 	_, _ = fmt.Fprintf(f, "%s %s\n", time.Now().Format(time.RFC3339Nano), fmt.Sprintf(format, args...))
+}
+
+func copyFile(source, destination string) error {
+	input, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	output, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o700)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(output, input); err != nil {
+		output.Close()
+		return err
+	}
+	return output.Close()
+}
+
+func handoffToTemp(handoffPath string) error {
+	current, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(os.TempDir(), "wslc-tui-updater-*.exe")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := copyFile(current, temporaryPath); err != nil {
+		os.Remove(temporaryPath)
+		return err
+	}
+	command := exec.Command(temporaryPath, "-handoff", handoffPath)
+	command.Env = append(os.Environ(), "WSLC_TUI_UPDATER_CHILD=1")
+	if err := command.Start(); err != nil {
+		os.Remove(temporaryPath)
+		return err
+	}
+	return nil
 }
