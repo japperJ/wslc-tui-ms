@@ -49,6 +49,18 @@ if ($checksums.algorithm -ne 'sha256' -or $checksums.assets.Count -ne 4) { throw
 if (($checksums.assets.name | Sort-Object -Unique).Count -ne $checksums.assets.Count) { throw 'Duplicate checksum asset' }
 if (($checksums.assets.name -join '|') -match 'checksums\.json') { throw 'Checksum manifest must not checksum itself' }
 
+$productPath = Join-Path $Root 'packaging/wix/Product.wxs'
+$productXml = [xml](Get-Content $productPath -Raw)
+$wixNamespace = 'http://wixtoolset.org/schemas/v4/wxs'
+$namespaceManager = [System.Xml.XmlNamespaceManager]::new($productXml.NameTable)
+$namespaceManager.AddNamespace('wix', $wixNamespace)
+$package = $productXml.SelectSingleNode('/wix:Wix/wix:Package', $namespaceManager)
+$fragment = $productXml.SelectSingleNode('/wix:Wix/wix:Fragment', $namespaceManager)
+if ($null -eq $package -or $null -eq $fragment) { throw 'Product.wxs must contain sibling Package and Fragment elements under Wix.' }
+if ($package.Scope -ne 'perUser') { throw 'Product.wxs package scope must remain perUser.' }
+$file = $fragment.SelectSingleNode('wix:ComponentGroup/wix:Component/wix:File', $namespaceManager)
+if ($null -eq $file -or $file.Name -ne 'wslc-tui.exe') { throw 'Product.wxs must install the executable as wslc-tui.exe.' }
+
 if ($ChecksumManifest) {
   if (-not (Test-Path $ChecksumManifest)) { throw "Checksum manifest not found: $ChecksumManifest" }
   Assert-SchemaValid $checksumSchemaPath $ChecksumManifest

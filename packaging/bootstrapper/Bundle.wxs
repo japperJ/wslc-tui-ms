@@ -7,7 +7,7 @@
       <bal:WixStandardBootstrapperApplication LicenseUrl="https://github.com/japperJ/wslc-tui-ms/blob/main/README.md" Theme="hyperlinkLicense" />
     </BootstrapperApplication>
     <Chain>
-      <MsiPackage SourceFile="$(var.MsiPath)" DisplayInternalUI="no" />
+      <MsiPackage SourceFile="$(var.MsiPath)" />
     </Chain>
   </Bundle>
 </Wix>
