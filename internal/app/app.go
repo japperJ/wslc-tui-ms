@@ -33,6 +33,102 @@ const (
 	viewLearn
 )
 
+const (
+	splashFrameInterval = 3 * time.Second
+)
+
+var splashFrames = []string{
+	`       .--------.
+      /  o    o  \
+     |     ^     |
+     |   W S L C  |
+      \  '---'  /
+       '--------'
+    Booting tiny robot...`,
+	`        .--.
+       |o_o |
+       |:_/ |
+      //   \ \
+     (|     | )
+    /'\_   _/\
+      || ||
+   WSL says: hello!`,
+	`     +----------------+
+     |   W S L C      |
+     | [##########]   |
+     |  Are we there  |
+     |    yet? ...    |
+     +----------------+
+       \  ^__^
+        \ (oo)\_______
+          (__)\       )\/\
+              ||----w |
+              ||     ||`,
+	`      W S L C
+        loading .
+       loading ..
+      loading ...
+
+   Containers are pretending
+        to behave.`,
+	`      \o/   \o/   \o/
+       |     |     |
+      / \   / \   / \
+
+       \o/  W S L C  \o/
+        |             |
+       / \           / \
+   Permission dance: successful!`,
+	`     +================+
+     ||   W S L C    ||
+     ||  almost ready ||
+     ||  no penguins  ||
+     ||  were harmed  ||
+     +================+`,
+	`       (o_o)
+       <)   )>  W S L C
+        /   \
+
+      (x_x)  WSL
+      Calm down. We got this.`,
+	`     .----------------.
+     |  W S L C READY  |
+     |  Native WSL TUI  |
+     '----------------'
+
+       * high five *`,
+}
+
+const splashLogo = ` __        __  _____  _      _____
+ \ \      / / / ____|| |    / ____|
+  \ \ /\ / / | (___  | |   | |
+   \ V  V /   \___ \ | |   | |
+    \_/\_/    ____) || |___| |____
+                |_____/ |______|
+          W S L C // NATIVE WSL CONTROL`
+
+var splashPalette = []lipgloss.Color{
+	ui.ColorBlue,
+	ui.ColorCyan,
+	ui.ColorPurple,
+	ui.ColorGreen,
+	ui.ColorYellow,
+	ui.ColorOrange,
+	ui.ColorRed,
+	ui.ColorBlue,
+}
+
+var splashPositions = [][2]float64{
+	{0.05, 0.05},
+	{0.45, 0.05},
+	{0.72, 0.18},
+	{0.62, 0.58},
+	{0.28, 0.68},
+	{0.05, 0.42},
+	{0.40, 0.32},
+	{0.20, 0.12},
+}
+
 type model struct {
 	width  int
 	height int
@@ -88,6 +184,10 @@ type model struct {
 	learnDetailActive bool
 	learnContent      string
 
+	// Startup splash
+	splashActive bool
+	splashFrame  int
+
 	// Components
 	textInput      textinput.Model
 	viewport       viewport.Model
@@ -117,8 +217,11 @@ type execDoneMsg struct {
 	id     int
 }
 
+type splashTickMsg struct{}
+
 func NewModelForTest(width, height int) model {
 	m := NewModel()
+	m.splashActive = false
 	m.width = width
 	m.height = height
 	// simulate filtered commands for category 0 (Container)
@@ -154,6 +257,7 @@ func NewModel() model {
 	m := model{
 		currentView:    viewCommands,
 		adminMode:      platform.IsElevated(),
+		splashActive:   true,
 		inputFocused:   true,
 		categories:     categories,
 		allCommands:    allCmds,
@@ -180,7 +284,11 @@ func NewModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	cmds := []tea.Cmd{textinput.Blink}
+	if m.splashActive {
+		cmds = append(cmds, splashTick())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -207,6 +315,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.formViewport.Height = vpHeight
 		return m, nil
 
+	case splashTickMsg:
+		if !m.splashActive {
+			return m, nil
+		}
+		m.splashFrame = (m.splashFrame + 1) % len(splashFrames)
+		return m, splashTick()
+
 	case execDoneMsg:
 		if msg.id != m.executionID {
 			return m, nil
@@ -218,6 +333,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.splashActive {
+			switch msg.String() {
+			case "enter":
+				m.splashActive = false
+				m.currentView = viewCommands
+				return m, nil
+			case "ctrl+c":
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		if m.running {
 			switch msg.String() {
 			case "esc":
@@ -1151,6 +1277,9 @@ func truncateString(s string, maxLen int) string {
 // ─── Rendering ──────────────────────────────────────────────────────
 
 func (m model) View() string {
+	if m.splashActive {
+		return m.renderSplash()
+	}
 	if m.clickRegions == nil {
 		m.clickRegions = &[]clickRegion{}
 	}
@@ -1186,6 +1315,45 @@ func (m model) View() string {
 	b.WriteString(m.renderStatusBar(footerContentRow))
 
 	return b.String()
+}
+
+func (m model) renderSplash() string {
+	frameIndex := m.splashFrame % len(splashFrames)
+	color := splashPalette[frameIndex%len(splashPalette)]
+	logo := lipgloss.NewStyle().Foreground(color).Bold(true).Render(splashLogo)
+	figure := lipgloss.NewStyle().Foreground(color).Render(splashFrames[frameIndex])
+	prompt := ui.ActionHintKeyStyle.Render("Press Enter") + ui.ActionHintStyle.Render(" to continue")
+	content := lipgloss.JoinVertical(lipgloss.Center, logo, "", figure, "", prompt)
+	if m.width < 1 || m.height < 1 {
+		return content
+	}
+
+	maxX := m.width - lipgloss.Width(content)
+	maxY := m.height - lipgloss.Height(content)
+	if maxX < 0 {
+		maxX = 0
+	}
+	if maxY < 0 {
+		maxY = 0
+	}
+	position := splashPositions[frameIndex%len(splashPositions)]
+	x := int(float64(maxX) * position[0])
+	y := int(float64(maxY) * position[1])
+
+	lines := make([]string, 0, y+lipgloss.Height(content))
+	for i := 0; i < y; i++ {
+		lines = append(lines, "")
+	}
+	for _, line := range strings.Split(content, "\n") {
+		lines = append(lines, strings.Repeat(" ", x)+line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func splashTick() tea.Cmd {
+	return tea.Tick(splashFrameInterval, func(time.Time) tea.Msg {
+		return splashTickMsg{}
+	})
 }
 
 func (m model) renderHeader() string {
