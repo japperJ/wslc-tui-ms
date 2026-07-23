@@ -156,6 +156,16 @@ func TestFocusedCommandFooterShowsUpdateShortcut(t *testing.T) {
 	}
 }
 
+func TestHeaderShowsBuildVersion(t *testing.T) {
+	old := buildinfo.Version
+	buildinfo.Version = "v9.9.9-test"
+	t.Cleanup(func() { buildinfo.Version = old })
+	m := NewModelForTest(120, 30)
+	if !strings.Contains(m.renderHeader(), "v9.9.9-test") {
+		t.Fatalf("header omitted build version: %s", m.renderHeader())
+	}
+}
+
 func TestCommandBrowserChannelShortcutTogglesAndFindsBetaPrerelease(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	store := settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))

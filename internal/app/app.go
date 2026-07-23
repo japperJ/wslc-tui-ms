@@ -1549,9 +1549,10 @@ func (m model) renderSplash() string {
 	frameIndex := m.splashFrame % len(splashFrames)
 	color := splashPalette[frameIndex%len(splashPalette)]
 	logo := lipgloss.NewStyle().Foreground(color).Bold(true).Render(splashLogo)
+	version := ui.HeaderTaglineStyle.Render("Version " + buildinfo.Version)
 	figure := lipgloss.NewStyle().Foreground(color).Render(splashFrames[frameIndex])
 	prompt := ui.ActionHintKeyStyle.Render("Press Enter") + ui.ActionHintStyle.Render(" to continue")
-	content := lipgloss.JoinVertical(lipgloss.Center, logo, "", figure, "", prompt)
+	content := lipgloss.JoinVertical(lipgloss.Center, logo, version, "", figure, "", prompt)
 	if m.width < 1 || m.height < 1 {
 		return content
 	}
@@ -1586,7 +1587,7 @@ func splashTick() tea.Cmd {
 
 func (m model) renderHeader() string {
 	// Left side: title + tagline
-	title := ui.HeaderTitleStyle.Render("  ▓  WSLC TUI  ")
+	title := ui.HeaderTitleStyle.Render("  ▓  WSLC TUI  " + buildinfo.Version + "  ")
 	tagline := ui.HeaderTaglineStyle.Render("Native containers for WSL")
 	if !m.adminMode {
 		tagline = ui.AdminWarningStyle.Render("Administrator mode required")

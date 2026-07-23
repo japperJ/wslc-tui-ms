@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 	"testing"
+	"wslc-tui-ms/internal/buildinfo"
 	"wslc-tui-ms/internal/update"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -56,5 +57,15 @@ func TestSplashDismissalPreservesStartupUpdateView(t *testing.T) {
 	got := updated.(model)
 	if got.currentView != viewUpdate {
 		t.Fatalf("startup update view was lost on splash dismissal: %v", got.currentView)
+	}
+}
+
+func TestSplashShowsBuildVersion(t *testing.T) {
+	old := buildinfo.Version
+	buildinfo.Version = "v9.9.9-test"
+	t.Cleanup(func() { buildinfo.Version = old })
+	m := NewModelForTest(120, 30)
+	if !strings.Contains(m.renderSplash(), "v9.9.9-test") {
+		t.Fatalf("splash omitted build version: %s", m.renderSplash())
 	}
 }
