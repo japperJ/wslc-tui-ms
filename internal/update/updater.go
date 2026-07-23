@@ -64,7 +64,7 @@ func DownloadAndInstall(ctx context.Context, client *http.Client, handoff Handof
 	switch handoff.Distribution {
 	case "portable":
 		return ApplyPortableZip(tmpPath, handoff.InstallDir, filepath.Base(handoff.CurrentExe))
-	case "msi":
+	case "msi", "installer":
 		return runInstaller("msiexec.exe", "/i", tmpPath, "/quiet", "/norestart")
 	case "exe":
 		return runInstaller(tmpPath, "/quiet", "/norestart")

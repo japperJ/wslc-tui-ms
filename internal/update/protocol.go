@@ -40,7 +40,7 @@ func (h Handoff) Validate() error {
 	if h.AttemptID == "" || h.TargetVersion == "" || h.AssetURL == "" || h.AssetName == "" || h.SHA256 == "" {
 		return fmt.Errorf("handoff is missing required fields")
 	}
-	if h.Distribution != "portable" && h.Distribution != "msi" && h.Distribution != "exe" {
+	if h.Distribution != "portable" && h.Distribution != "msi" && h.Distribution != "installer" && h.Distribution != "exe" {
 		return fmt.Errorf("unsupported distribution %q", h.Distribution)
 	}
 	if h.InstallDir == "" || h.CurrentExe == "" || h.ResultPath == "" || h.ParentPID <= 0 {

@@ -39,3 +39,22 @@ func TestReadHandoffRejectsUnsupportedDistribution(t *testing.T) {
 		t.Fatal("unsupported distribution should fail")
 	}
 }
+
+func TestInstallerDistributionIsAcceptedAsMSI(t *testing.T) {
+	handoff := Handoff{
+		SchemaVersion: HandoffSchemaVersion,
+		AttemptID:     "installer-attempt",
+		Distribution:  "installer",
+		AssetURL:      "https://example.invalid/update.msi",
+		AssetName:     "wslc-tui-v1.2.4-beta.2-windows-amd64.msi",
+		SHA256:        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		InstallDir:    `C:\Users\test\AppData\Local\wslc-tui-ms`,
+		CurrentExe:    `C:\Users\test\AppData\Local\wslc-tui-ms\wslc-tui.exe`,
+		TargetVersion: "v1.2.4-beta.2",
+		ResultPath:    `C:\Users\test\AppData\Roaming\wslc-tui-ms\update-result.json`,
+		ParentPID:     123,
+	}
+	if err := handoff.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
