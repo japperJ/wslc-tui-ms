@@ -9,10 +9,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 func DownloadAndInstall(ctx context.Context, client *http.Client, handoff Handoff) error {
 	if err := handoff.Validate(); err != nil {
+		return err
+	}
+	releaseLock, err := acquireUpdateLock(filepath.Join(handoff.InstallDir, ".wslc-update.lock"))
+	if err != nil {
+		return err
+	}
+	defer releaseLock()
+	tempPattern, err := tempAssetPattern(handoff)
+	if err != nil {
 		return err
 	}
 	u, err := url.Parse(handoff.AssetURL)
@@ -37,7 +48,7 @@ func DownloadAndInstall(ctx context.Context, client *http.Client, handoff Handof
 	if handoff.AssetSize > 0 && resp.ContentLength >= 0 && resp.ContentLength != handoff.AssetSize {
 		return fmt.Errorf("download size %d does not match expected size %d", resp.ContentLength, handoff.AssetSize)
 	}
-	tmp, err := os.CreateTemp("", "wslc-update-*.download")
+	tmp, err := os.CreateTemp("", tempPattern)
 	if err != nil {
 		return err
 	}
@@ -73,9 +84,63 @@ func DownloadAndInstall(ctx context.Context, client *http.Client, handoff Handof
 	}
 }
 
+func tempAssetPattern(handoff Handoff) (string, error) {
+	ext := filepath.Ext(handoff.AssetName)
+	want := map[string]string{
+		"portable":  ".zip",
+		"msi":       ".msi",
+		"installer": ".msi",
+		"exe":       ".exe",
+	}[handoff.Distribution]
+	if want == "" || !strings.EqualFold(ext, want) {
+		return "", fmt.Errorf("asset %q has unexpected extension for %s distribution", handoff.AssetName, handoff.Distribution)
+	}
+	return "wslc-update-*" + want, nil
+}
+
 func runInstaller(program string, args ...string) error {
-	if err := exec.Command(program, args...).Run(); err != nil {
-		return fmt.Errorf("installer failed: %w", err)
+	return runInstallerWithTimeout(5*time.Minute, program, args...)
+}
+
+func runInstallerWithTimeout(timeout time.Duration, program string, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	err := exec.CommandContext(ctx, program, args...).Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("installer timed out after %s", timeout)
+	}
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1618 {
+			return fmt.Errorf("another Windows Installer operation is already in progress (exit code 1618)")
+		}
+		return fmt.Errorf("installer failed (exit code %d): %w", exitCode(err), err)
 	}
 	return nil
+}
+
+func exitCode(err error) int {
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return exitErr.ExitCode()
+	}
+	return -1
+}
+
+func acquireUpdateLock(path string) (func(), error) {
+	lock, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("another update is already in progress")
+		}
+		return nil, fmt.Errorf("create update lock: %w", err)
+	}
+	if _, err := fmt.Fprintf(lock, "%d\n", os.Getpid()); err != nil {
+		_ = lock.Close()
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("write update lock: %w", err)
+	}
+	if err := lock.Close(); err != nil {
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("close update lock: %w", err)
+	}
+	return func() { _ = os.Remove(path) }, nil
 }

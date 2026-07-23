@@ -77,7 +77,7 @@ New-VersionResource $rootResource 'wslc-tui.exe' 'wslc-tui'
 try { & go build -trimpath -ldflags $installerLdflags -o $installerBin $root }
 finally { Remove-Item $rootResource -Force -ErrorAction SilentlyContinue }
 if ($LASTEXITCODE -ne 0) { throw 'Installer Go build failed' }
-& wix build -arch x64 -d ProductVersion=$msiVersion -d ApplicationExecutable=$installerBin -d UpdaterExecutable=$updaterBin -o $msi (Join-Path $root 'packaging/wix/Product.wxs')
+& wix build -arch x64 -ext WixToolset.Util.wixext -d ProductVersion=$msiVersion -d ApplicationExecutable=$installerBin -d UpdaterExecutable=$updaterBin -o $msi (Join-Path $root 'packaging/wix/Product.wxs')
 if ($LASTEXITCODE -ne 0) { throw 'WiX MSI build failed' }
 & wix build -arch x64 -ext WixToolset.Bal.wixext -d ProductVersion=$msiVersion -d MsiPath=$msi -o $bundle (Join-Path $root 'packaging/bootstrapper/Bundle.wxs')
 if ($LASTEXITCODE -ne 0) { throw 'WiX bootstrapper build failed' }

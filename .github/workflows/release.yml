@@ -31,6 +31,7 @@ jobs:
         run: |
           dotnet tool install --global wix --version $env:WIX_VERSION
           wix extension add -g WixToolset.Bal.wixext/4.0.5
+          wix extension add -g WixToolset.Util.wixext/4.0.5
 
       - name: Test Go source
         run: |

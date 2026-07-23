@@ -9,8 +9,60 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
+
+func TestRunInstallerWithTimeoutReportsTimeout(t *testing.T) {
+	err := runInstallerWithTimeout(20*time.Millisecond, os.Args[0], "-test.run=TestInstallerHelperProcess")
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("runInstallerWithTimeout error = %v, want timeout", err)
+	}
+}
+
+func TestAcquireUpdateLockRejectsConcurrentUpdate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".wslc-update.lock")
+	release, err := acquireUpdateLock(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if _, err := acquireUpdateLock(path); err == nil {
+		t.Fatal("second update lock acquisition should fail")
+	}
+}
+
+func TestInstallerHelperProcess(t *testing.T) {
+	if !strings.Contains(strings.Join(os.Args, " "), "-test.run=TestInstallerHelperProcess") {
+		return
+	}
+	time.Sleep(time.Second)
+}
+
+func TestTempAssetPatternPreservesInstallerExtension(t *testing.T) {
+	tests := []struct {
+		distribution string
+		assetName    string
+		want         string
+	}{
+		{"msi", "wslc-tui-v1.2.8-beta.1-windows-amd64.msi", "wslc-update-*.msi"},
+		{"installer", "wslc-tui-v1.2.8-beta.1-windows-amd64.msi", "wslc-update-*.msi"},
+		{"exe", "wslc-tui-v1.2.8-beta.1-windows-amd64.exe", "wslc-update-*.exe"},
+		{"portable", "wslc-tui-v1.2.8-beta.1-windows-amd64-portable.zip", "wslc-update-*.zip"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.distribution, func(t *testing.T) {
+			got, err := tempAssetPattern(Handoff{Distribution: tt.distribution, AssetName: tt.assetName})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("temp pattern = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestApplyPortableZipReplacesInstallAndRemovesBackup(t *testing.T) {
 	installDir := t.TempDir()

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="WSLC TUI" Manufacturer="japperJ" Version="$(var.ProductVersion)"
            UpgradeCode="E79E2A68-1CE9-4C2A-A1B6-2AA8B6B9DCA1" Scope="perUser">
     <MajorUpgrade DowngradeErrorMessage="A newer version of WSLC TUI is already installed." />
@@ -8,6 +9,10 @@
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="INSTALLFOLDER" Name="wslc-tui-ms" />
     </StandardDirectory>
+
+    <util:CloseApplication Id="CloseWslcTui" Target="wslc-tui.exe"
+                           CloseMessage="yes" Timeout="10"
+                           TerminateProcess="1" RebootPrompt="no" />
 
     <Feature Id="MainFeature" Title="WSLC TUI" Level="1">
       <ComponentGroupRef Id="ApplicationFiles" />
