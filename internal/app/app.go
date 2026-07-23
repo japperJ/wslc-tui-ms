@@ -1990,6 +1990,7 @@ func (m model) renderStatusBar(contentRowY int) string {
 		parts = append(parts, renderKeyHint("PgUp/PgDn", "Page"))
 		parts = append(parts, renderKeyHint("g/G", "Top/End"))
 		parts = append(parts, renderKeyHint("r", "Re-run"))
+		parts = append(parts, renderKeyHint("c", "Copy command"))
 		parts = append(parts, renderKeyHint("y", "Copy"))
 		parts = append(parts, renderKeyHint("Esc", "Back"))
 	} else if m.currentView == viewLearn {

@@ -3,6 +3,8 @@ package app
 import (
 	"strings"
 	"testing"
+
+	"wslc-tui-ms/internal/commands"
 )
 
 func stripAnsiTest(s string) string {
@@ -140,5 +142,20 @@ func TestViewFitsHeight(t *testing.T) {
 		if lines > dim[1] {
 			t.Errorf("width=%d height=%d: rendered %d lines (overflow)", dim[0], dim[1], lines)
 		}
+	}
+}
+
+func TestOutputFooterAdvertisesCopyCommand(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.currentView = viewOutput
+	m.outputCmd = "wslc container ls"
+	m.outputResult = &commands.ExecutionResult{}
+
+	plain := stripAnsiTest(m.View())
+	if !strings.Contains(plain, "c Copy command") {
+		t.Fatalf("output footer should advertise command copying, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "y Copy") {
+		t.Fatalf("output footer should retain output copying, got:\n%s", plain)
 	}
 }
