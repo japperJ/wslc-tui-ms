@@ -10,15 +10,14 @@
 
 ## Commands
 
-Create a staging bundle:
+Create a runnable staging bundle:
 
 ```powershell
 pwsh -NoProfile -File ./scripts/build-phase1-test-iso.ps1 -Tag v1.2.3 -OutputDirectory ./artifacts
 ```
 
-For a runnable bundle, build artifacts separately and pass them with
-`-ArtifactDirectory ./dist`. Without that option the output is source-only and
-the runner fails early with `Missing packaged artifacts`.
+The generated runnable bundle is under `artifacts/phase1-runnable-v1.2.3/` and
+contains the prebuilt MSI, bootstrapper, portable ZIP, checksums, and metadata.
 
 Create an ISO with a Windows ADK ISO authoring tool:
 
@@ -33,19 +32,21 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\RUN-TESTS.ps1
 ```
 
-The runner also accepts `-Tag vX.Y.Z` for explicit selection. A bundle with no
-tagged metadata/checksum files or with more than one tag fails before the
-Windows/prerequisite checks with a concise remediation message.
+The runner accepts `-Tag vX.Y.Z` for explicit selection, or accepts
+`.\RUN-TESTS.ps1` without `-Tag` by inferring the single staged tag. A bundle
+with no tagged metadata/checksum files or with more than one tag fails before
+the Windows/prerequisite checks with a concise remediation message.
 
 ## Validation
 
-The tagged build was run on the current Windows host with `oscdimg.exe`
-unavailable. The script used the built-in
+The runnable tagged build was run on the current Windows host with
+`oscdimg.exe` unavailable. The script used the built-in
 `IMAPI2FS.MsftFileSystemImage` fallback and produced a mountable ISO with a
-manifest-backed bundle.
+manifest-backed bundle and prebuilt packaging artifacts.
 
-- Exact ISO: `C:\REP\wslc-tui-ms\artifacts\phase1-v1.2.3-imapi2fs-final2\wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
-- Size: `1,835,008` bytes
+- Exact ISO: `C:\REP\wslc-tui-ms\artifacts\phase1-runnable-v1.2.3\wslc-tui-ms-phase1-packaging-smoke-v1.2.3.iso`
+- Size: `6,750,208` bytes
+- SHA-256: `4C52C8377755434CFE07665687646A080A6F5C93F5EB10EF00461D9603C0E233`
 - `Mount-DiskImage` attached it as `E:\`; Windows reported filesystem `UDF`.
 - `E:\README.md` was read successfully (`3,045` bytes).
 - `E:\bundle-manifest.json` was read successfully (`10,846` bytes).
@@ -57,6 +58,7 @@ manifest-backed bundle.
 - The repository does not contain redistributable Go/WiX installers. Supply
   them through `-DependencyRoot` and verify hashes before disconnecting the VM.
 - Go, .NET, and WiX are administrator/developer build-VM prerequisites only;
-  the final standard-user setup test does not install or resolve them.
+  Go and WiX are not required inside the VM, and the final standard-user setup
+  test does not install or resolve them.
 - No credentials, tokens, signing certificates, or GitHub access are needed
   or copied. The bundle does not fetch repository content at runtime.
