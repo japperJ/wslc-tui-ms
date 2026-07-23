@@ -18,6 +18,8 @@ Implemented update discovery and the user-controlled TUI update flow.
 - Asset mapping uses Phase 1 names: installer distributions select the MSI, `exe` selects the bootstrapper EXE, and all other distributions select the portable ZIP.
 - Phase 2's Download and Install confirmation intentionally creates only an in-memory handoff-ready state. It performs no network asset download and launches no installer; Phase 3 owns that handoff.
 - Automatic failures are returned as silent service results and do not interrupt startup. Manual failures remain actionable and are rendered as a TUI status notice.
+- Fixed focused command-search handling so `u` starts a manual update check rather than inserting text, and initialize an unconfigured update channel from embedded Beta build metadata while preserving an explicitly persisted Stable/Beta choice.
+- Added regression coverage for focused `u` handling, build-channel initialization, persisted channel precedence, and Beta prerelease `v1.2.3` discovery through a fake release client.
 
 ## Verification
 

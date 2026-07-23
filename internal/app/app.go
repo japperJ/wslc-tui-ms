@@ -275,10 +275,7 @@ func NewModel() model {
 	path, _ := settings.DefaultPath()
 	store := settings.NewStore(path)
 	state, _ := store.Load()
-	channel := update.Channel(state.Channel)
-	if channel != update.Stable && channel != update.Beta {
-		channel = update.Stable
-	}
+	channel := initialUpdateChannel(buildinfo.Channel, state)
 	m := model{
 		currentView:    viewCommands,
 		adminMode:      platform.IsElevated(),
@@ -308,6 +305,16 @@ func NewModel() model {
 	m.clickRegions = &[]clickRegion{}
 	m.updateFiltered()
 	return m
+}
+
+func initialUpdateChannel(buildChannel string, state settings.Settings) update.Channel {
+	if state.ChannelSet {
+		return update.Channel(state.Channel)
+	}
+	if strings.EqualFold(strings.TrimSpace(buildChannel), "beta") {
+		return update.Beta
+	}
+	return update.Stable
 }
 
 func (m model) Init() tea.Cmd {
@@ -854,6 +861,8 @@ func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.inputFocused || m.textInput.Focused() {
 		switch msg.String() {
+		case "u":
+			return m, m.startUpdateCheck(true)
 		case "esc":
 			m.textInput.Blur()
 			m.inputFocused = false

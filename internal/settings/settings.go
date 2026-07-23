@@ -14,9 +14,10 @@ const (
 )
 
 type Settings struct {
-	Channel   Channel `json:"channel"`
-	LastCheck string  `json:"lastCheck,omitempty"`
-	Deferred  string  `json:"deferredVersion,omitempty"`
+	Channel    Channel `json:"channel"`
+	LastCheck  string  `json:"lastCheck,omitempty"`
+	Deferred   string  `json:"deferredVersion,omitempty"`
+	ChannelSet bool    `json:"-"`
 }
 
 type Store struct{ Path string }
@@ -43,8 +44,13 @@ func (s Store) Load() (Settings, error) {
 	if err := json.Unmarshal(b, &result); err != nil {
 		return result, err
 	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err == nil {
+		_, result.ChannelSet = raw["channel"]
+	}
 	if result.Channel != Stable && result.Channel != Beta {
 		result.Channel = Stable
+		result.ChannelSet = false
 	}
 	return result, nil
 }

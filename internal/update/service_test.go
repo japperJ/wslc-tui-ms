@@ -56,6 +56,22 @@ func TestServiceSkipsMalformedAndSupportsPrereleasePromotion(t *testing.T) {
 		t.Fatalf("decision=%+v err=%v", d, err)
 	}
 }
+
+func TestBetaBuildDiscoversPrereleaseV123FromFakeGitHubClient(t *testing.T) {
+	f := &fakeClient{
+		releases:  []Release{release("v1.2.3", true)},
+		policy:    Policy{MinimumSupportedVersion: "0.0.0"},
+		checksums: checksum("v1.2.3"),
+	}
+	s := testService(t, f)
+	d, err := s.Check(context.Background(), Beta, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.Available || d.Version != "v1.2.3" || d.Channel != string(Beta) {
+		t.Fatalf("decision=%+v", d)
+	}
+}
 func TestServicePolicyAndDeferralPersist(t *testing.T) {
 	f := &fakeClient{releases: []Release{release("v1.1.0", false)}, policy: Policy{MinimumSupportedVersion: "v1.1.0"}, checksums: checksum("v1.1.0")}
 	s := testService(t, f)

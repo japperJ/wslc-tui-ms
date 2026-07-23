@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"wslc-tui-ms/internal/buildinfo"
 	"wslc-tui-ms/internal/settings"
 	"wslc-tui-ms/internal/update"
 
@@ -84,5 +85,36 @@ func TestAutomaticUpdateFailureIsNonBlocking(t *testing.T) {
 	}
 	if m.updateError == nil {
 		t.Fatal("failure should remain observable as a status notice")
+	}
+}
+
+func TestFocusedCommandSearchUStartsManualUpdateCheck(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))}
+	inputBefore := m.inputValue
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m = updated.(model)
+	if cmd == nil || !m.updateChecking {
+		t.Fatal("focused u should start a manual update check")
+	}
+	if m.inputValue != inputBefore {
+		t.Fatalf("focused u changed search input to %q", m.inputValue)
+	}
+}
+
+func TestInitialUpdateChannelUsesBetaBuildWhenUnconfigured(t *testing.T) {
+	old := buildinfo.Channel
+	buildinfo.Channel = "Beta"
+	t.Cleanup(func() { buildinfo.Channel = old })
+
+	if got := initialUpdateChannel(buildinfo.Channel, settings.Settings{}); got != update.Beta {
+		t.Fatalf("initial channel = %q, want %q", got, update.Beta)
+	}
+}
+
+func TestInitialUpdateChannelPreservesPersistedChoice(t *testing.T) {
+	if got := initialUpdateChannel("Beta", settings.Settings{Channel: settings.Stable, ChannelSet: true}); got != update.Stable {
+		t.Fatalf("persisted channel = %q, want %q", got, update.Stable)
 	}
 }
