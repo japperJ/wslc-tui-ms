@@ -3,9 +3,13 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -219,6 +223,8 @@ type model struct {
 	updateChecking bool
 	updateConfirm  bool
 	updateHandoff  bool
+	updateStatus   string
+	updateLaunch   func(update.Handoff) error
 }
 
 type clickRegion struct {
@@ -238,6 +244,8 @@ type updateResultMsg struct {
 	err      error
 }
 
+type updateInstallMsg struct{ err error }
+
 func NewModelForTest(width, height int) model {
 	m := NewModel()
 	m.splashActive = false
@@ -245,6 +253,7 @@ func NewModelForTest(width, height int) model {
 	m.height = height
 	// simulate filtered commands for category 0 (Container)
 	m.updateFiltered()
+	m.updateLaunch = nil
 	return m
 }
 
@@ -302,6 +311,10 @@ func NewModel() model {
 		},
 		updateChannel: channel,
 		updateService: update.Service{Client: update.NewGitHubClient("japperJ", "wslc-tui-ms", nil), Store: store, Distribution: buildinfo.Distribution, CurrentVersion: buildinfo.Version},
+		updateLaunch:  launchUpdater,
+	}
+	if result, err := update.ConsumeResult(filepath.Join(filepath.Dir(store.Path), "update-result.json")); err == nil {
+		m.updateStatus = formatUpdateResult(result)
 	}
 	m.clickRegions = &[]clickRegion{}
 	m.updateFiltered()
@@ -375,6 +388,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentView = viewUpdate
 		}
 		return m, nil
+	case updateInstallMsg:
+		m.updateHandoff = false
+		if msg.err != nil {
+			m.updateError = msg.err
+			return m, nil
+		}
+		return m, tea.Quit
 
 	case tea.KeyMsg:
 		if m.splashActive {
@@ -874,11 +894,75 @@ func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.updateConfirm = false
 			m.updateHandoff = true
 			m.currentView = viewUpdate
+			if m.updateLaunch != nil {
+				handoff, err := m.buildUpdateHandoff()
+				if err != nil {
+					m.updateError = err
+					m.updateHandoff = false
+					return m, nil
+				}
+				return m, func() tea.Msg { return updateInstallMsg{err: m.updateLaunch(handoff)} }
+			}
 		}
 	case "n":
 		m.updateConfirm = false
 	}
 	return m, nil
+}
+
+func (m model) buildUpdateHandoff() (update.Handoff, error) {
+	if m.updateDecision == nil {
+		return update.Handoff{}, fmt.Errorf("no update is selected")
+	}
+	currentExe, err := os.Executable()
+	if err != nil {
+		return update.Handoff{}, err
+	}
+	settingsPath := m.updateService.Store.Path
+	attemptBytes := make([]byte, 16)
+	if _, err := rand.Read(attemptBytes); err != nil {
+		return update.Handoff{}, err
+	}
+	attemptID := hex.EncodeToString(attemptBytes)
+	resultPath := filepath.Join(filepath.Dir(settingsPath), "update-result.json")
+	handoffPath := filepath.Join(filepath.Dir(settingsPath), "update-handoff.json")
+	handoff := update.Handoff{
+		SchemaVersion: update.HandoffSchemaVersion,
+		AttemptID:     attemptID,
+		Distribution:  m.updateService.Distribution,
+		AssetURL:      m.updateDecision.Asset.URL,
+		AssetName:     m.updateDecision.Asset.Name,
+		SHA256:        m.updateDecision.Asset.SHA256,
+		AssetSize:     m.updateDecision.Asset.Size,
+		InstallDir:    filepath.Dir(currentExe),
+		CurrentExe:    currentExe,
+		TargetVersion: m.updateDecision.Version,
+		ResultPath:    resultPath,
+		RelaunchArgs:  os.Args[1:],
+		ParentPID:     os.Getpid(),
+	}
+	if handoff.WorkingDir, err = os.Getwd(); err != nil {
+		return update.Handoff{}, err
+	}
+	if err := update.WriteHandoff(handoffPath, handoff); err != nil {
+		return update.Handoff{}, err
+	}
+	return handoff, nil
+}
+
+func launchUpdater(handoff update.Handoff) error {
+	updaterPath := filepath.Join(filepath.Dir(handoff.CurrentExe), "wslc-tui-updater.exe")
+	return exec.Command(updaterPath, "-handoff", filepath.Join(filepath.Dir(handoff.ResultPath), "update-handoff.json")).Start()
+}
+
+func formatUpdateResult(result update.Result) string {
+	if result.Status == "installed" {
+		return "Updated to " + result.Version
+	}
+	if result.Error != "" {
+		return "Update failed: " + result.Error
+	}
+	return "Update status: " + result.Status
 }
 
 func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1603,6 +1687,9 @@ func (m model) renderUpdateView() string {
 	_, contentHeight := m.calculateLayout()
 	var lines []string
 	channel := strings.Title(string(m.updateChannel))
+	if m.updateStatus != "" {
+		lines = append(lines, "  "+ui.OutputSuccessStyle.Render(m.updateStatus), "")
+	}
 	if m.updateChecking {
 		lines = append(lines, "  "+ui.OutputJsonStringStyle.Render("⟳ Checking GitHub Releases..."), "")
 	}

@@ -5,7 +5,7 @@ $expectedZip = "wslc-tui-$Tag-windows-amd64-portable.zip"
 $zip = Join-Path $Dist $expectedZip
 if (-not (Test-Path $zip)) { throw "Missing portable archive: $zip" }
 $entries = @(tar -tf $zip | Where-Object { $_ -and $_ -notmatch '/$' } | ForEach-Object { $_.Replace('\', '/') })
-if (($entries | Sort-Object) -join '|' -ne 'LICENSE.txt|README.txt|wslc-tui.exe') { throw "Unexpected portable ZIP contents: $($entries -join ', ')" }
+if (($entries | Sort-Object) -join '|' -ne 'LICENSE.txt|README.txt|wslc-tui-updater.exe|wslc-tui.exe') { throw "Unexpected portable ZIP contents: $($entries -join ', ')" }
 $version = & (Join-Path $Dist 'wslc-tui.exe') --version
 if ($version -notmatch "wslc-tui $([regex]::Escape($Tag)) .*distribution=portable") { throw "Portable metadata mismatch: $version" }
 $msi = Join-Path $Dist "wslc-tui-$Tag-windows-amd64.msi"

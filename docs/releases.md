@@ -12,6 +12,8 @@ Tag releases with `vX.Y.Z` SemVer. The workflow produces these deterministic ass
 
 The checksum manifest uses SHA-256 and covers the MSI, bootstrapper, portable ZIP, and policy file, but intentionally excludes itself. The policy schema is [`packaging/update-policy.schema.json`](../packaging/update-policy.schema.json).
 
+The updater helper is embedded in the portable ZIP and per-user MSI installation as `wslc-tui-updater.exe`; it is not a separate release asset.
+
 ## Local Build
 
 Build artifacts on a Windows maintainer/build VM with Go 1.24.5 and WiX

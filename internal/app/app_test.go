@@ -44,6 +44,7 @@ func appWithDecision(t *testing.T) model {
 	t.Helper()
 	m := NewModelForTest(120, 30)
 	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json")), CurrentVersion: "v1.0.0", Distribution: "portable", Now: func() time.Time { return time.Unix(10, 0) }}
+	m.updateChannel = update.Stable
 	m.updateDecision = &update.Decision{Available: true, Version: "v2.0.0", Channel: "stable", Notes: "security fixes", Asset: update.Asset{Name: "payload.zip", URL: "https://example/payload", SHA256: "hash"}}
 	m.currentView = viewUpdate
 	return m

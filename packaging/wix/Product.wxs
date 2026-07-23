@@ -19,6 +19,7 @@
     <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
       <Component Id="ApplicationExecutable" Guid="*">
         <File Id="ApplicationExecutableFile" Name="wslc-tui.exe" Source="$(var.ApplicationExecutable)" KeyPath="yes" />
+        <File Id="UpdaterExecutableFile" Name="wslc-tui-updater.exe" Source="$(var.UpdaterExecutable)" />
         <RegistryKey Root="HKCU" Key="Software\japperJ\wslc-tui-ms">
           <RegistryValue Name="InstallRoot" Type="string" Value="[INSTALLFOLDER]" />
           <RegistryValue Name="Version" Type="string" Value="$(var.ProductVersion)" />
