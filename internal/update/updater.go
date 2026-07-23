@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -76,7 +77,8 @@ func DownloadAndInstall(ctx context.Context, client *http.Client, handoff Handof
 	case "portable":
 		return ApplyPortableZip(tmpPath, handoff.InstallDir, filepath.Base(handoff.CurrentExe))
 	case "msi", "installer":
-		return runInstaller("msiexec.exe", "/i", tmpPath, "/quiet", "/norestart")
+		installerLog := filepath.Join(filepath.Dir(handoff.ResultPath), "installer.log")
+		return runInstaller("msiexec.exe", "/i", tmpPath, "/quiet", "/norestart", "/l*v", installerLog)
 	case "exe":
 		return runInstaller(tmpPath, "/quiet", "/norestart")
 	default:
@@ -129,6 +131,13 @@ func acquireUpdateLock(path string) (func(), error) {
 	lock, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		if os.IsExist(err) {
+			if b, readErr := os.ReadFile(path); readErr == nil {
+				pid, parseErr := strconv.Atoi(strings.TrimSpace(string(b)))
+				if parseErr == nil && !processIsRunning(pid) {
+					_ = os.Remove(path)
+					return acquireUpdateLock(path)
+				}
+			}
 			return nil, fmt.Errorf("another update is already in progress")
 		}
 		return nil, fmt.Errorf("create update lock: %w", err)

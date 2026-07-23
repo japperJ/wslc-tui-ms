@@ -33,6 +33,18 @@ func TestAcquireUpdateLockRejectsConcurrentUpdate(t *testing.T) {
 	}
 }
 
+func TestAcquireUpdateLockRemovesStaleOwner(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".wslc-update.lock")
+	if err := os.WriteFile(path, []byte("999999999\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	release, err := acquireUpdateLock(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+}
+
 func TestInstallerHelperProcess(t *testing.T) {
 	if !strings.Contains(strings.Join(os.Args, " "), "-test.run=TestInstallerHelperProcess") {
 		return
