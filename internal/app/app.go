@@ -213,6 +213,7 @@ type model struct {
 	// and never couple the TUI to a network implementation.
 	updateService  update.Service
 	updateChannel  update.Channel
+	channelStatus  string
 	updateDecision *update.Decision
 	updateError    error
 	updateChecking bool
@@ -818,6 +819,28 @@ func (m *model) startUpdateCheck(manual bool) tea.Cmd {
 	return m.updateCheckCommand(manual)
 }
 
+func (m *model) toggleUpdateChannel() tea.Cmd {
+	if m.updateChannel == update.Stable {
+		m.updateChannel = update.Beta
+	} else {
+		m.updateChannel = update.Stable
+	}
+
+	channel := settings.Channel(m.updateChannel)
+	state, err := m.updateService.Store.Load()
+	if err == nil {
+		state.Channel = channel
+		err = m.updateService.Store.Save(state)
+	}
+	label := strings.Title(string(m.updateChannel))
+	if err != nil {
+		m.channelStatus = fmt.Sprintf("Update channel: %s (not persisted: %v)", label, err)
+	} else {
+		m.channelStatus = "Update channel: " + label
+	}
+	return m.startUpdateCheck(true)
+}
+
 func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -861,6 +884,8 @@ func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.inputFocused || m.textInput.Focused() {
 		switch msg.String() {
+		case "c", "C":
+			return m, m.toggleUpdateChannel()
 		case "u", "U":
 			return m, m.startUpdateCheck(true)
 		case "esc":
@@ -929,6 +954,8 @@ func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.currentView = viewLearn
 	case "u", "U":
 		return m, m.startUpdateCheck(true)
+	case "c", "C":
+		return m, m.toggleUpdateChannel()
 	case "1", "2", "3", "4", "5", "6", "7":
 		idx := int(msg.String()[0] - '1')
 		if idx < len(m.categories) {
@@ -1534,7 +1561,7 @@ func (m model) renderCommandsView() string {
 	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, " ", content)
 
 	var parts []string
-	if m.updateChecking || m.updateDecision != nil || m.updateError != nil {
+	if m.updateChecking || m.updateDecision != nil || m.updateError != nil || m.channelStatus != "" {
 		parts = append(parts, m.renderUpdateBanner(), "")
 	}
 	parts = append(parts, mainContent)
@@ -1550,7 +1577,11 @@ func (m model) renderCommandsView() string {
 
 func (m model) renderUpdateBanner() string {
 	if m.updateChecking {
-		return ui.CardActiveStyle.Width(m.width - 2).Render("  Checking for updates in the background...")
+		label := "Checking for updates in the background..."
+		if m.channelStatus != "" {
+			label = m.channelStatus + "  |  " + label
+		}
+		return ui.CardActiveStyle.Width(m.width - 2).Render("  " + label)
 	}
 	if m.updateError != nil {
 		return ui.CardStyle.Width(m.width - 2).Render(ui.OutputErrorStyle.Render("  Update check failed: ") + m.updateError.Error() + "  [u] Retry")
@@ -1561,6 +1592,9 @@ func (m model) renderUpdateBanner() string {
 			label = "Required update: " + m.updateDecision.Version + "  [u] View notes"
 		}
 		return ui.CardActiveStyle.Width(m.width - 2).Render("  " + label)
+	}
+	if m.channelStatus != "" {
+		return ui.CardActiveStyle.Width(m.width - 2).Render("  " + m.channelStatus)
 	}
 	return ""
 }

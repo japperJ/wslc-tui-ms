@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 	"wslc-tui-ms/internal/buildinfo"
@@ -21,6 +22,22 @@ func (c appUpdateClient) Policy(context.Context) (update.Policy, error) {
 }
 func (c appUpdateClient) Checksums(context.Context, update.Release) (map[string]update.Asset, error) {
 	return nil, nil
+}
+
+type browserUpdateClient struct{}
+
+func (browserUpdateClient) Releases(context.Context) ([]update.Release, error) {
+	return []update.Release{{
+		Tag:        "v2.0.0-beta.1",
+		Prerelease: true,
+		Assets:     []update.Asset{{Name: "wslc-tui-v2.0.0-beta.1-windows-amd64-portable.zip", URL: "https://example/payload"}},
+	}}, nil
+}
+func (browserUpdateClient) Policy(context.Context) (update.Policy, error) {
+	return update.Policy{MinimumSupportedVersion: "0.0.0"}, nil
+}
+func (browserUpdateClient) Checksums(context.Context, update.Release) (map[string]update.Asset, error) {
+	return map[string]update.Asset{"wslc-tui-v2.0.0-beta.1-windows-amd64-portable.zip": {SHA256: "hash"}}, nil
 }
 
 func appWithDecision(t *testing.T) model {
@@ -115,6 +132,67 @@ func TestFocusedCommandSearchUppercaseUStartsManualUpdateCheck(t *testing.T) {
 	}
 	if m.inputValue != inputBefore {
 		t.Fatalf("focused U changed search input to %q", m.inputValue)
+	}
+}
+
+func TestCommandBrowserChannelShortcutTogglesAndFindsBetaPrerelease(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	store := settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err := store.Save(settings.Settings{Channel: settings.Stable}); err != nil {
+		t.Fatal(err)
+	}
+	m.updateService = update.Service{
+		Client:         browserUpdateClient{},
+		Store:          store,
+		CurrentVersion: "v1.0.0",
+		Distribution:   "portable",
+	}
+	m.updateChannel = update.Stable
+	m.inputFocused = true
+	m.textInput.Focus()
+	m.inputValue = "wslc"
+	m.textInput.SetValue(m.inputValue)
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(model)
+	if cmd == nil || m.updateChannel != update.Beta {
+		t.Fatalf("channel shortcut did not start beta check: channel=%q cmd=%v", m.updateChannel, cmd != nil)
+	}
+	if m.inputValue != "wslc" || m.textInput.Value() != "wslc" {
+		t.Fatalf("channel shortcut changed search input to %q", m.inputValue)
+	}
+	if !strings.Contains(m.channelStatus, "Beta") || !strings.Contains(m.renderCommandsView(), "Beta") {
+		t.Fatalf("active channel status is not visible: %q", m.channelStatus)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Channel != settings.Beta {
+		t.Fatalf("persisted channel=%q, want %q", state.Channel, settings.Beta)
+	}
+
+	updated, _ = m.Update(cmd())
+	m = updated.(model)
+	if m.currentView != viewUpdate || m.updateDecision == nil || m.updateDecision.Version != "v2.0.0-beta.1" {
+		t.Fatalf("beta-only prerelease was not surfaced: view=%v decision=%+v", m.currentView, m.updateDecision)
+	}
+}
+
+func TestFocusedCommandBrowserUppercaseChannelShortcutIsConsumed(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))}
+	m.updateChannel = update.Beta
+	m.inputValue = "wslc"
+	m.textInput.SetValue(m.inputValue)
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
+	m = updated.(model)
+	if cmd == nil || m.updateChannel != update.Stable {
+		t.Fatalf("uppercase channel shortcut did not toggle: channel=%q cmd=%v", m.updateChannel, cmd != nil)
+	}
+	if m.inputValue != "wslc" || m.textInput.Value() != "wslc" {
+		t.Fatalf("uppercase channel shortcut changed search input to %q", m.inputValue)
 	}
 }
 
