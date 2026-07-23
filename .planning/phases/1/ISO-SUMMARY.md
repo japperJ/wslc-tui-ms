@@ -3,7 +3,7 @@
 ## Files
 
 - `scripts/build-phase1-test-iso.ps1` creates a new tagged staging directory and, when `oscdimg.exe` is available, a new ISO. It refuses to overwrite either output.
-- `packaging/tests/RUN-TESTS.ps1` is the VM entry point. It derives the bundle root from `$PSScriptRoot`, validates prebuilt artifacts under `artifacts\`, and requires only Windows x64, UAC, a non-admin account, and PowerShell.
+- `packaging/tests/RUN-TESTS.ps1` is the VM entry point. It derives the bundle root from `$PSScriptRoot`, infers a single release tag from tagged metadata/checksum files when `-Tag` is omitted, validates prebuilt artifacts under `artifacts\`, and requires only Windows x64, UAC, a non-admin account, and PowerShell.
 - `packaging/iso/README.md` documents VM prerequisites, admin-only setup, standard-user execution, evidence, and export.
 - `packaging/iso/dependencies.json` records that the standard-user smoke run has no developer-tool dependency.
 - `docs/releases.md` and `README.md` link the workflow.
@@ -30,8 +30,12 @@ Run inside the mounted/extracted bundle as the fresh standard user:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\RUN-TESTS.ps1 -Tag v1.2.3
+.\RUN-TESTS.ps1
 ```
+
+The runner also accepts `-Tag vX.Y.Z` for explicit selection. A bundle with no
+tagged metadata/checksum files or with more than one tag fails before the
+Windows/prerequisite checks with a concise remediation message.
 
 ## Validation
 

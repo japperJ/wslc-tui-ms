@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $true)][string]$Tag,
+  [string]$Tag,
   [ValidateSet('Stable', 'Beta')][string]$Channel = 'Beta',
   [string]$Commit = 'iso-test',
   [string]$BuildDate = 'iso-test'
@@ -10,6 +10,22 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path $PSScriptRoot).Path
 $repo = Join-Path $root 'repository'
 $artifacts = Join-Path $root 'artifacts'
+if ([string]::IsNullOrWhiteSpace($Tag)) {
+  $tagPattern = '^wslc-tui-(v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)-(?:checksums|metadata)\.json$'
+  $tags = @(
+    Get-ChildItem -LiteralPath $artifacts -File -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -match $tagPattern } |
+      ForEach-Object { [regex]::Match($_.Name, $tagPattern).Groups[1].Value } |
+      Sort-Object -Unique
+  )
+  if ($tags.Count -eq 0) {
+    throw 'Could not infer a single release tag from artifacts metadata/checksum files. Stage one release or rerun with -Tag vX.Y.Z.'
+  }
+  if ($tags.Count -gt 1) {
+    throw "Multiple packaged release tags found in artifacts: $($tags -join ', '). Remove extras or rerun with -Tag vX.Y.Z."
+  }
+  $Tag = $tags[0]
+}
 $results = Join-Path $root 'results'
 $required = @(
   "wslc-tui-$Tag-windows-amd64.msi",

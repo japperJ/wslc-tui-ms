@@ -7,6 +7,7 @@ $builder = Join-Path $root 'scripts/build-phase1-test-iso.ps1'
 $runner = Get-Content (Join-Path $root 'packaging/tests/RUN-TESTS.ps1') -Raw
 
 if ($runner -notmatch '\$PSScriptRoot') { throw 'ISO runner must derive its bundle root from $PSScriptRoot.' }
+if ($runner -match '\[Parameter\(Mandatory\s*=\s*\$true\)\]\[string\]\$Tag') { throw 'ISO runner tag must be optional.' }
 if ($runner -match 'Get-Command\s+go|Get-Command\s+wix|packaging\\build\.ps1') {
   throw 'ISO runner must not require developer packaging tools or build from source.'
 }
@@ -24,6 +25,26 @@ try {
   }
   if (($output -join "`n") -match 'Go|WiX|wix') {
     throw "Missing-artifact failure resolved developer prerequisites: $($output -join ' | ')"
+  }
+
+  Push-Location ([IO.Path]::GetTempPath())
+  try { $output = & pwsh -NoProfile -File (Join-Path $bundle 'RUN-TESTS.ps1') 2>&1 } finally { Pop-Location }
+  if (($output -join "`n") -notmatch 'Could not infer a single release tag') {
+    throw "Zero-tag failure was not actionable: $($output -join ' | ')"
+  }
+
+  Set-Content (Join-Path $bundle 'artifacts\wslc-tui-v1.2.3-checksums.json') '{"releaseTag":"v1.2.3"}'
+  Push-Location ([IO.Path]::GetTempPath())
+  try { $output = & pwsh -NoProfile -File (Join-Path $bundle 'RUN-TESTS.ps1') 2>&1 } finally { Pop-Location }
+  if (($output -join "`n") -match 'Could not infer a single release tag') {
+    throw "Single-tag inference failed: $($output -join ' | ')"
+  }
+
+  Set-Content (Join-Path $bundle 'artifacts\wslc-tui-v2.0.0-metadata.json') '{"releaseTag":"v2.0.0"}'
+  Push-Location ([IO.Path]::GetTempPath())
+  try { $output = & pwsh -NoProfile -File (Join-Path $bundle 'RUN-TESTS.ps1') 2>&1 } finally { Pop-Location }
+  if (($output -join "`n") -notmatch 'Multiple packaged release tags found') {
+    throw "Multiple-tag failure was not actionable: $($output -join ' | ')"
   }
 
   $sourceArtifacts = Join-Path $temp 'prebuilt'

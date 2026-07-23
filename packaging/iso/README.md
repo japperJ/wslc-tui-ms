@@ -22,16 +22,19 @@ standard-user runner.
    directory.
 2. Create a fresh local standard user with UAC enabled. Sign in as that user;
    do not use `Run as administrator` for the smoke run.
-4. Open PowerShell in the bundle root and run:
+3. Open PowerShell in the bundle root and run:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\RUN-TESTS.ps1 -Tag v1.2.3
+.\RUN-TESTS.ps1
 ```
 
-The script validates artifact names, checksums, metadata, and portable layout,
-then launches the portable, MSI, and bootstrapper smoke tests as the current
-standard user. Missing artifacts fail early with one concise message.
+The script infers the release tag from the single tagged metadata/checksum file
+set under `artifacts\`, then validates artifact names, checksums, metadata, and
+portable layout. Pass `-Tag vX.Y.Z` to select a tag explicitly. If no tag or
+multiple tags are staged, it fails with an actionable message before running
+the smoke tests. It then launches the portable, MSI, and bootstrapper smoke
+tests as the current standard user.
 
 ## Expected Evidence
 
