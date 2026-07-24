@@ -6,6 +6,8 @@ WSLC TUI gives command-line users a searchable command catalog, guided forms for
 
 > **Status:** This is an early-stage project. The command catalog and UI are actively evolving.
 
+For task-oriented Windows documentation, start with the [documentation hub](docs/README.md).
+
 ## What It Does
 
 - Browse WSLC commands by category: Container, Image, Network, Volume, Session, System, and Registry.
