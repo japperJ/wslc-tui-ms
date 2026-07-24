@@ -25,8 +25,15 @@ function Assert-SchemaRejects([string]$Schema, $Instance, [string]$Reason) {
   $path = Join-Path ([System.IO.Path]::GetTempPath()) "wslc-invalid-$PID-$([guid]::NewGuid()).json"
   try {
     $Instance | ConvertTo-Json -Depth 10 | Set-Content $path -Encoding UTF8
-    & node $validator $Schema $path *> $null
-    if ($LASTEXITCODE -eq 0) { throw "Schema accepted invalid instance: $Reason" }
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = 'Continue'
+      & node $validator $Schema $path *> $null
+      $validationExitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($validationExitCode -eq 0) { throw "Schema accepted invalid instance: $Reason" }
   } finally { Remove-Item $path -Force -ErrorAction SilentlyContinue }
 }
 
