@@ -80,6 +80,31 @@ if ($LASTEXITCODE -ne 0) { throw 'Package validation failed.' }
 & (Join-Path $root 'packaging/tests/test-contracts.ps1') -ChecksumManifest $checksumPath
 if ($LASTEXITCODE -ne 0) { throw 'Release contract validation failed.' }
 
+$remoteTagLookup = $null
+$previousErrorActionPreference = $ErrorActionPreference
+try {
+  $ErrorActionPreference = 'Continue'
+  & git ls-remote --exit-code --quiet origin "refs/tags/$Tag" *> $null
+  $remoteTagLookup = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $previousErrorActionPreference
+}
+if ($remoteTagLookup -ne 0) {
+  $head = (& git rev-parse HEAD).Trim()
+  if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve the current Git commit.' }
+  & git show-ref --verify --quiet "refs/tags/$Tag" *> $null
+  if ($LASTEXITCODE -eq 0) {
+    $localTagCommit = (& git rev-list -n 1 $Tag).Trim()
+    if ($localTagCommit -ne $head) { throw "Local tag $Tag does not point to the current commit." }
+  } else {
+    & git tag -a $Tag -m "Release $Tag" $head
+    if ($LASTEXITCODE -ne 0) { throw "Unable to create local tag $Tag." }
+  }
+  Write-Output "Pushing tag $Tag"
+  & git push origin "refs/tags/$Tag"
+  if ($LASTEXITCODE -ne 0) { throw "Unable to push tag $Tag." }
+}
+
 $releaseArgs = @(
   'release', 'create', $Tag,
   '--verify-tag',

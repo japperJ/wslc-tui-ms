@@ -65,10 +65,12 @@ If a previous build failed and left partial files, retry with `-Force` to remove
 
 ## Release Checklist
 
-1. Confirm the tag exists and points to the intended commit.
+1. Confirm the current commit is the intended release commit.
 2. Run the script without `-Publish`.
 3. Inspect the generated release assets and notes on GitHub.
 4. Confirm the release channel matches the tag.
 5. Publish the draft from GitHub.
+
+If the tag does not exist remotely, the script creates and pushes an annotated tag at the current commit after build and validation succeed.
 
 The workflow in `.github/workflows/release.yml` builds and uploads CI artifacts only. It does not publish releases or wait for a VM smoke-test runner.
