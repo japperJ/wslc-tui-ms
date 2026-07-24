@@ -2,7 +2,8 @@
 param(
   [Parameter(Mandatory = $true)][string]$Tag,
   [string]$OutputDirectory = (Join-Path (Get-Location) "dist\release-$Tag"),
-  [switch]$Publish
+  [switch]$Publish,
+  [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,9 +35,11 @@ if ($releaseLookupExitCode -eq 0) { throw "A GitHub release already exists for $
 
 if (Test-Path -LiteralPath $output) {
   $existingItems = @(Get-ChildItem -LiteralPath $output -Force)
-  if ($existingItems.Count -gt 0) {
+  if ($existingItems.Count -gt 0 -and -not $Force) {
     throw "Output directory already contains files. Remove them or pass a new -OutputDirectory: $output"
   }
+  if ($Force) { Remove-Item -LiteralPath $output -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $output | Out-Null
 } else {
   New-Item -ItemType Directory -Force -Path $output | Out-Null
 }

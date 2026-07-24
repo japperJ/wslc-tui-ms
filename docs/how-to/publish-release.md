@@ -57,6 +57,12 @@ By default, artifacts are written to `dist\release-<tag>`. Use a separate direct
 
 The script refuses to reuse an existing output directory or overwrite an existing GitHub release.
 
+If a previous build failed and left partial files, retry with `-Force` to remove that output directory before rebuilding:
+
+```powershell
+.\scripts\publish-release.ps1 -Tag v1.2.16-beta.1 -Publish -Force
+```
+
 ## Release Checklist
 
 1. Confirm the tag exists and points to the intended commit.
