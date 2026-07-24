@@ -22,8 +22,15 @@ if (-not (Get-Command wix -ErrorAction SilentlyContinue)) { throw 'WiX v4 (wix) 
 & gh auth status *> $null
 if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI authentication is required. Run gh auth login first.' }
 
-$releaseLookup = & gh release view $Tag 2>&1
-if ($LASTEXITCODE -eq 0) { throw "A GitHub release already exists for $Tag." }
+$previousErrorActionPreference = $ErrorActionPreference
+try {
+  $ErrorActionPreference = 'Continue'
+  & gh release view $Tag *> $null
+  $releaseLookupExitCode = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $previousErrorActionPreference
+}
+if ($releaseLookupExitCode -eq 0) { throw "A GitHub release already exists for $Tag." }
 
 if (Test-Path -LiteralPath $output) {
   throw "Output directory already exists. Remove it or pass a new -OutputDirectory: $output"
