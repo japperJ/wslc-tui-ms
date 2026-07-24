@@ -22,7 +22,7 @@ if (-not (Get-Command wix -ErrorAction SilentlyContinue)) { throw 'WiX v4 (wix) 
 & gh auth status *> $null
 if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI authentication is required. Run gh auth login first.' }
 
-& gh release view $Tag *> $null
+$releaseLookup = & gh release view $Tag 2>&1
 if ($LASTEXITCODE -eq 0) { throw "A GitHub release already exists for $Tag." }
 
 if (Test-Path -LiteralPath $output) {
