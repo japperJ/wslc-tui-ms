@@ -1,0 +1,37 @@
+# Go build and test outputs
+/wslc-tui-ms.exe
+/wslc-tui-ms.exe~
+/dist/
+/coverage.out
+/coverage.html
+
+# Packaging and ISO test outputs
+/artifacts/
+/results/
+/repository/
+/tools/
+*.iso
+*.msi
+*.zip
+*.wixpdb
+*.wixobj
+*.log
+
+# Local JavaScript test dependencies
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Generated WiX extensions and local tool state
+/.wix/extensions/
+/.planning/
+
+# Temporary and editor files
+*.tmp
+*.temp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+.idea/
