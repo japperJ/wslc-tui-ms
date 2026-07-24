@@ -41,7 +41,7 @@ function New-VersionResource([string]$Destination, [string]$OriginalName, [strin
   $destinationDir = Split-Path $Destination -Parent
   $destinationName = Split-Path $Destination -Leaf
   try {
-    $template | ConvertTo-Json -Depth 10 | Set-Content $jsonPath -Encoding utf8NoBOM
+    $template | ConvertTo-Json -Depth 10 | Set-Content $jsonPath -Encoding UTF8
     Push-Location $destinationDir
     try { & go run github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.7.0 $jsonPath -64 -o $destinationName -propagate-ver-strings }
     finally { Pop-Location }

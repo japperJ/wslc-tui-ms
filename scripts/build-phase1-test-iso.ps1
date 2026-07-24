@@ -111,7 +111,7 @@ if ($ArtifactDirectory) {
       [ordered]@{ name = $name; sizeBytes = (Get-Item $file).Length; sha256 = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant() }
     }
     [ordered]@{ schemaVersion = 1; releaseTag = $Tag; algorithm = 'sha256'; assets = @($assets) } |
-      ConvertTo-Json -Depth 5 | Set-Content (Join-Path $bundle "artifacts\$checksumName") -Encoding utf8NoBOM
+      ConvertTo-Json -Depth 5 | Set-Content (Join-Path $bundle "artifacts\$checksumName") -Encoding UTF8
   }
   $metadataName = "wslc-tui-$Tag-metadata.json"
   $metadataSource = Join-Path $ArtifactDirectory $metadataName
@@ -124,7 +124,7 @@ if ($ArtifactDirectory) {
       assets = @($artifactNames + $checksumName)
       source = 'prebuilt-artifact-directory'
     }
-    $metadata | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $bundle "artifacts\$metadataName") -Encoding utf8NoBOM
+    $metadata | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $bundle "artifacts\$metadataName") -Encoding UTF8
   }
 } else {
   Write-Warning 'SOURCE-ONLY BUNDLE: no -ArtifactDirectory supplied; RUN-TESTS.ps1 will fail until prebuilt artifacts are staged.'
@@ -140,7 +140,7 @@ foreach ($file in Get-ChildItem $bundle -File -Recurse | Where-Object { $_.Name 
   $relative = $file.FullName.Substring($bundle.Length + 1).Replace('\', '/')
   $manifest.files += [ordered]@{ path = $relative; sizeBytes = $file.Length; sha256 = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
-$manifest | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $bundle 'bundle-manifest.json') -Encoding utf8NoBOM
+$manifest | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $bundle 'bundle-manifest.json') -Encoding UTF8
 
 if ($SkipIso) {
   Write-Output "BUNDLE=$bundle"

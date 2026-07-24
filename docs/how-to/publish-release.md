@@ -11,14 +11,20 @@ Install and authenticate:
 - GitHub CLI (`gh`) authenticated with permission to create releases.
 - Node.js and npm for the pinned JSON Schema contract validator.
 
-Run the script from the repository root in PowerShell.
+Run the script from the repository root in Windows PowerShell 5.1 or PowerShell 7.
+
+PowerShell requires `./` or `.\` before a script path. From the repository root, use:
+
+```powershell
+.\scripts\publish-release.ps1 -Tag v1.2.15-beta.1
+```
 
 ## Create A Beta Draft
 
 Prerelease tags create Beta builds automatically:
 
 ```powershell
-./scripts/publish-release.ps1 -Tag v1.2.15-beta.1
+.\scripts\publish-release.ps1 -Tag v1.2.15-beta.1
 ```
 
 The script builds the binaries, generates the SHA-256 checksum manifest, validates the package contracts, and creates a draft GitHub release marked as a prerelease.
@@ -28,7 +34,7 @@ The script builds the binaries, generates the SHA-256 checksum manifest, validat
 Plain SemVer tags create Stable builds:
 
 ```powershell
-./scripts/publish-release.ps1 -Tag v1.2.15
+.\scripts\publish-release.ps1 -Tag v1.2.15
 ```
 
 The script creates a draft release without the prerelease flag.
@@ -38,7 +44,7 @@ The script creates a draft release without the prerelease flag.
 Drafts are recommended so the maintainer can inspect assets and release notes first. To publish immediately, add `-Publish`:
 
 ```powershell
-./scripts/publish-release.ps1 -Tag v1.2.15 -Publish
+.\scripts\publish-release.ps1 -Tag v1.2.15 -Publish
 ```
 
 ## Output Directory
@@ -46,14 +52,14 @@ Drafts are recommended so the maintainer can inspect assets and release notes fi
 By default, artifacts are written to `dist\release-<tag>`. Use a separate directory when repeating a build:
 
 ```powershell
-./scripts/publish-release.ps1 -Tag v1.2.15 -OutputDirectory .\dist\release-v1.2.15
+.\scripts\publish-release.ps1 -Tag v1.2.15 -OutputDirectory .\dist\release-v1.2.15
 ```
 
 The script refuses to reuse an existing output directory or overwrite an existing GitHub release.
 
 ## Release Checklist
 
-1. Confirm the tag is correct and points to the intended commit.
+1. Confirm the tag exists and points to the intended commit.
 2. Run the script without `-Publish`.
 3. Inspect the generated release assets and notes on GitHub.
 4. Confirm the release channel matches the tag.

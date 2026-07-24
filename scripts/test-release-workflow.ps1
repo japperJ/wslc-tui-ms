@@ -26,7 +26,7 @@ foreach ($run in @($run1, $run2)) {
     $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
     [ordered]@{ name = $name; sizeBytes = (Get-Item $file).Length; sha256 = $hash }
   }
-  [ordered]@{ schemaVersion = 1; releaseTag = $Tag; algorithm = 'sha256'; assets = @($assets) } | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding utf8NoBOM
+  [ordered]@{ schemaVersion = 1; releaseTag = $Tag; algorithm = 'sha256'; assets = @($assets) } | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding UTF8
   if ($AllowDeferred) {
     & pwsh -NoProfile -File (Join-Path $root 'packaging/tests/test-contracts.ps1')
   } else {

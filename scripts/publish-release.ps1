@@ -60,7 +60,7 @@ $checksumPath = Join-Path $output "wslc-tui-$Tag-checksums.json"
   releaseTag = $Tag
   algorithm = 'sha256'
   assets = @($assets)
-} | ConvertTo-Json -Depth 5 | Set-Content $checksumPath -Encoding utf8NoBOM
+} | ConvertTo-Json -Depth 5 | Set-Content $checksumPath -Encoding UTF8
 
 & (Join-Path $root 'packaging/tests/test-package.ps1') -Dist $output -Tag $Tag
 if ($LASTEXITCODE -ne 0) { throw 'Package validation failed.' }

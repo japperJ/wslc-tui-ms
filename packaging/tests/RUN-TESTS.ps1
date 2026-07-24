@@ -82,5 +82,5 @@ if ($LASTEXITCODE -ne 0) { throw 'Bootstrapper smoke test failed.' }
 
 Copy-Item (Join-Path $env:TEMP 'wslc-tui-msi-smoke.log') $results -ErrorAction Stop
 Copy-Item (Join-Path $env:TEMP 'wslc-tui-bootstrapper-smoke.log') $results -ErrorAction Stop
-'SMOKE_RESULT=passed' | Set-Content (Join-Path $results 'result-marker.txt') -Encoding utf8NoBOM
+'SMOKE_RESULT=passed' | Set-Content (Join-Path $results 'result-marker.txt') -Encoding UTF8
 Write-Output "SMOKE_RESULT=passed; evidence=$results"
