@@ -33,9 +33,13 @@ try {
 if ($releaseLookupExitCode -eq 0) { throw "A GitHub release already exists for $Tag." }
 
 if (Test-Path -LiteralPath $output) {
-  throw "Output directory already exists. Remove it or pass a new -OutputDirectory: $output"
+  $existingItems = @(Get-ChildItem -LiteralPath $output -Force)
+  if ($existingItems.Count -gt 0) {
+    throw "Output directory already contains files. Remove them or pass a new -OutputDirectory: $output"
+  }
+} else {
+  New-Item -ItemType Directory -Force -Path $output | Out-Null
 }
-New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 Write-Output "Building $Tag ($channel) into $output"
 & (Join-Path $root 'packaging/build.ps1') -Tag $Tag -Channel $channel -Output $output -Commit (& git rev-parse HEAD) -BuildDate ([DateTime]::UtcNow.ToString('o'))
