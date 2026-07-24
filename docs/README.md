@@ -6,6 +6,7 @@ WSLC TUI is a Windows terminal user interface for discovering and running WSLC c
 
 - [Run WSLC TUI on Windows](tutorials/run-on-windows.md): Follow a complete first-use walkthrough.
 - [Install and update](how-to/install-and-update.md): Install a release or update an existing installation.
+- [Publish a release](how-to/publish-release.md): Build and publish Stable or Beta releases manually.
 - [Troubleshoot startup](how-to/troubleshoot-startup.md): Diagnose failures before or during launch.
 - [Troubleshoot installation](how-to/troubleshoot-installation.md): Diagnose MSI, bootstrapper, and portable-package issues.
 - [Command-line reference](reference/command-line.md): Find supported command-line options.

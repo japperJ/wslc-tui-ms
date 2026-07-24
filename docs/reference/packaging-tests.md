@@ -32,6 +32,6 @@ Contract validation checks JSON schemas, policy fixtures, checksum coverage, and
 
 The command creates an ISO when `oscdimg.exe` is available. Otherwise it creates a complete staging directory. It does not overwrite the repository's existing ISO.
 
-## VM Smoke Tests
+## Optional VM Smoke Tests
 
-Use a clean Windows 10/11 x64 snapshot with UAC enabled. Build artifacts as an administrator, then run the MSI and bootstrapper smoke tests as a fresh standard user. The tests verify per-user installation state, installer metadata, and the absence of machine-wide state.
+These tests are optional and are not a release gate. If used, run them on a clean Windows 10/11 x64 snapshot with UAC enabled. Build artifacts as an administrator, then run the MSI and bootstrapper smoke tests as a fresh standard user. The tests verify per-user installation state, installer metadata, and the absence of machine-wide state.

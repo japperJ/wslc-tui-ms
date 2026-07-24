@@ -1,4 +1,4 @@
-name: Windows Release
+name: Windows Release Build
 
 on:
   push:
@@ -97,60 +97,5 @@ jobs:
             dist/*checksums.json
             update-policy.json
 
-  verify-installer-vm:
-    needs: build-release
-    # This label must point at a disposable Windows 10/11 x64 snapshot. The
-    # runner is restored before each job and uses a fresh standard-user account.
-    runs-on: [self-hosted, windows, x64, clean-vm]
-    steps:
-      - name: Checkout tagged source
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-      - name: Download release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-release-${{ github.ref_name }}
-          path: dist
-      - name: Run standard-user installer smoke matrix
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path verification-evidence | Out-Null
-          $tag = '${{ github.ref_name }}'
-          $installRoot = Join-Path $env:LOCALAPPDATA 'wslc-tui-ms'
-          & ./packaging/tests/smoke-msi.ps1 -Msi "./dist/wslc-tui-$tag-windows-amd64.msi" -Bootstrapper "./dist/wslc-tui-$tag-windows-amd64.exe" -InstallRoot $installRoot *>&1 | Tee-Object verification-evidence/msi-result.txt
-          if ($LASTEXITCODE -ne 0) { throw 'MSI smoke verification failed.' }
-          & ./packaging/tests/smoke-bootstrapper.ps1 -Bootstrapper "./dist/wslc-tui-$tag-windows-amd64.exe" -InstallRoot $installRoot *>&1 | Tee-Object verification-evidence/bootstrapper-result.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Bootstrapper smoke verification failed.' }
-          Copy-Item (Join-Path $env:TEMP 'wslc-tui-msi-smoke.log') verification-evidence/ -ErrorAction Stop
-          Copy-Item (Join-Path $env:TEMP 'wslc-tui-bootstrapper-smoke.log') verification-evidence/ -ErrorAction Stop
-          'SMOKE_RESULT=passed' | Set-Content verification-evidence/result-marker.txt
-      - name: Publish installer smoke evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer-smoke-${{ github.ref_name }}
-          path: verification-evidence
-
-  create-release:
-    needs: [build-release, verify-installer-vm]
-    runs-on: windows-latest
-    steps:
-      - name: Download release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-release-${{ github.ref_name }}
-          path: dist
-      - name: Create draft release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          prerelease: ${{ needs.build-release.outputs.prerelease }}
-          files: |
-            dist/wslc-tui-${{ github.ref_name }}-windows-amd64.msi
-            dist/wslc-tui-${{ github.ref_name }}-windows-amd64.exe
-            dist/wslc-tui-${{ github.ref_name }}-windows-amd64-portable.zip
-            dist/wslc-tui-${{ github.ref_name }}-checksums.json
-            update-policy.json
+  # Publishing is intentionally manual. Use scripts/publish-release.ps1 after
+  # reviewing the artifacts from this build.

@@ -1,0 +1,81 @@
+[CmdletBinding()]
+param(
+  [Parameter(Mandatory = $true)][string]$Tag,
+  [string]$OutputDirectory = (Join-Path (Get-Location) "dist\release-$Tag"),
+  [switch]$Publish
+)
+
+$ErrorActionPreference = 'Stop'
+
+if ($Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
+  throw "Tag must be a SemVer tag such as v1.2.3 or v1.2.3-beta.1: $Tag"
+}
+
+$channel = if ($Tag -match '-') { 'Beta' } else { 'Stable' }
+$isPrerelease = $channel -eq 'Beta'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$output = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputDirectory))
+
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI (gh) is required.' }
+if (-not (Get-Command go -ErrorAction SilentlyContinue)) { throw 'Go is required.' }
+if (-not (Get-Command wix -ErrorAction SilentlyContinue)) { throw 'WiX v4 (wix) is required to publish MSI and bootstrapper assets.' }
+& gh auth status *> $null
+if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI authentication is required. Run gh auth login first.' }
+
+& gh release view $Tag *> $null
+if ($LASTEXITCODE -eq 0) { throw "A GitHub release already exists for $Tag." }
+
+if (Test-Path -LiteralPath $output) {
+  throw "Output directory already exists. Remove it or pass a new -OutputDirectory: $output"
+}
+New-Item -ItemType Directory -Force -Path $output | Out-Null
+
+Write-Output "Building $Tag ($channel) into $output"
+& (Join-Path $root 'packaging/build.ps1') -Tag $Tag -Channel $channel -Output $output -Commit (& git rev-parse HEAD) -BuildDate ([DateTime]::UtcNow.ToString('o'))
+if ($LASTEXITCODE -ne 0) { throw 'Packaging build failed.' }
+
+$assetNames = @(
+  "wslc-tui-$Tag-windows-amd64.msi",
+  "wslc-tui-$Tag-windows-amd64.exe",
+  "wslc-tui-$Tag-windows-amd64-portable.zip",
+  'update-policy.json'
+)
+$assets = foreach ($name in $assetNames) {
+  $path = Join-Path $output $name
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing release asset: $name" }
+  $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+  [ordered]@{ name = $name; sizeBytes = (Get-Item -LiteralPath $path).Length; sha256 = $hash }
+}
+
+$checksumPath = Join-Path $output "wslc-tui-$Tag-checksums.json"
+[ordered]@{
+  schemaVersion = 1
+  releaseTag = $Tag
+  algorithm = 'sha256'
+  assets = @($assets)
+} | ConvertTo-Json -Depth 5 | Set-Content $checksumPath -Encoding utf8NoBOM
+
+& (Join-Path $root 'packaging/tests/test-package.ps1') -Dist $output -Tag $Tag
+if ($LASTEXITCODE -ne 0) { throw 'Package validation failed.' }
+& (Join-Path $root 'packaging/tests/test-contracts.ps1') -ChecksumManifest $checksumPath
+if ($LASTEXITCODE -ne 0) { throw 'Release contract validation failed.' }
+
+$releaseArgs = @(
+  'release', 'create', $Tag,
+  '--verify-tag',
+  '--title', "$Tag $channel",
+  '--generate-notes'
+)
+if (-not $Publish) { $releaseArgs += '--draft' }
+if ($isPrerelease) { $releaseArgs += '--prerelease' }
+$releaseArgs += @(
+  (Join-Path $output "wslc-tui-$Tag-windows-amd64.msi"),
+  (Join-Path $output "wslc-tui-$Tag-windows-amd64.exe"),
+  (Join-Path $output "wslc-tui-$Tag-windows-amd64-portable.zip"),
+  $checksumPath,
+  (Join-Path $output 'update-policy.json')
+)
+
+Write-Output "Creating $channel GitHub release for $Tag"
+& gh @releaseArgs
+if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed.' }

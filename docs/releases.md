@@ -33,14 +33,11 @@ Toolset v4 installed:
 
 WiX v4.0.5 is required for MSI and bootstrapper output. The build script still creates and validates the portable ZIP when `wix` is unavailable, but release verification is `blocked` rather than passed. Use `-AllowDeferred` only for an explicit local deferred check; it records that the matrix was not executed.
 
-## VM Smoke Test
+## Manual Publishing
 
-Use a clean Windows 10/11 x64 snapshot with UAC enabled. Build as the VM administrator, then run `packaging/tests/smoke-msi.ps1` as a fresh standard user with a medium-integrity token and writable `%LOCALAPPDATA%`. The test captures an MSI log and verifies the exact per-user path, HKCU values, installer metadata, and absence of HKLM, service, task, or Program Files state. Run the bootstrapper from the same standard account and record its result in the release evidence; its only package payload must be the generated MSI.
+Release publishing is maintainer-controlled and does not wait for a self-hosted VM. Use [`scripts/publish-release.ps1`](../scripts/publish-release.ps1), which builds the tag, validates package contracts, generates checksums, and creates a draft release. See [`docs/how-to/publish-release.md`](how-to/publish-release.md) for the full procedure.
 
-The ISO smoke runner requires only Windows x64, UAC, a non-admin standard-user
-context, PowerShell, and prebuilt artifacts. It does not require Go, .NET, WiX,
-`.git`, repository access, or internet. The separate release build job owns the
-pinned Go/WiX prerequisites.
+The repository still contains optional MSI, bootstrapper, portable, and offline ISO smoke-test scripts for maintainers who want additional local verification. They are not a release gate.
 
 No signing certificate or signing secret is needed for the initial unsigned release. `SIGNING_COMMAND` is an optional future boundary in the workflow and is skipped when unset. Unsigned artifacts can trigger a Windows SmartScreen unknown-publisher prompt.
 
