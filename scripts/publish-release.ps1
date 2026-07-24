@@ -8,6 +8,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Write-Utf8NoBom([string]$Path, [string]$Content) {
+  $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
+  [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+}
+
 if ($Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
   throw "Tag must be a SemVer tag such as v1.2.3 or v1.2.3-beta.1: $Tag"
 }
@@ -62,12 +67,13 @@ $assets = foreach ($name in $assetNames) {
 }
 
 $checksumPath = Join-Path $output "wslc-tui-$Tag-checksums.json"
-[ordered]@{
+$checksumJson = [ordered]@{
   schemaVersion = 1
   releaseTag = $Tag
   algorithm = 'sha256'
   assets = @($assets)
-} | ConvertTo-Json -Depth 5 | Set-Content $checksumPath -Encoding UTF8
+} | ConvertTo-Json -Depth 5
+Write-Utf8NoBom $checksumPath $checksumJson
 
 & (Join-Path $root 'packaging/tests/test-package.ps1') -Dist $output -Tag $Tag
 if ($LASTEXITCODE -ne 0) { throw 'Package validation failed.' }

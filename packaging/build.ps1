@@ -7,6 +7,12 @@ param(
   [string]$BuildDate = 'unknown'
 )
 $ErrorActionPreference = 'Stop'
+
+function Write-Utf8NoBom([string]$Path, [string]$Content) {
+  $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
+  [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+}
+
 if ($Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') { throw "Tag must be a SemVer tag: $Tag" }
 $version = $Tag.Substring(1)
 $msiVersion = ($version -split '-')[0]
@@ -41,7 +47,7 @@ function New-VersionResource([string]$Destination, [string]$OriginalName, [strin
   $destinationDir = Split-Path $Destination -Parent
   $destinationName = Split-Path $Destination -Leaf
   try {
-    $template | ConvertTo-Json -Depth 10 | Set-Content $jsonPath -Encoding UTF8
+    Write-Utf8NoBom $jsonPath ($template | ConvertTo-Json -Depth 10)
     Push-Location $destinationDir
     try { & go run github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.7.0 $jsonPath -64 -o $destinationName -propagate-ver-strings }
     finally { Pop-Location }
