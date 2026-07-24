@@ -14,7 +14,7 @@ if ($Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
 $channel = if ($Tag -match '-') { 'Beta' } else { 'Stable' }
 $isPrerelease = $channel -eq 'Beta'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$output = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputDirectory))
+$output = [System.IO.Path]::GetFullPath($OutputDirectory)
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI (gh) is required.' }
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) { throw 'Go is required.' }
