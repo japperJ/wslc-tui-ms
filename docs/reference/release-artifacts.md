@@ -16,7 +16,12 @@ The updater helper is embedded in the portable ZIP and per-user MSI installation
 
 ## Channels
 
-The GitHub release `prerelease` flag is the channel source of truth:
+The release tag selects the channel:
+
+- `v1.2.3` means Stable.
+- `v1.2.3-beta.1` means Beta.
+
+The GitHub release `prerelease` flag is then set from the tag:
 
 - `true` means Beta.
 - `false` means Stable.

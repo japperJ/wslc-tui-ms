@@ -16,7 +16,7 @@ The smoke matrix runs on a clean Windows x64 environment as a standard user. It 
 
 ## Publish And Promote
 
-Release assets are associated with a SemVer tag. Stable and Beta are represented by the GitHub release `prerelease` state. Promotion changes that state only; assets and checksums must not be rebuilt during promotion.
+Release assets are associated with a SemVer tag. A plain `vX.Y.Z` tag selects Stable; a tag with a prerelease suffix such as `vX.Y.Z-beta.1` selects Beta. The workflow applies that selection to both the embedded build metadata and the GitHub release `prerelease` state. Promotion changes release state only; assets and checksums must not be rebuilt during promotion.
 
 ## Offline Verification
 

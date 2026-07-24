@@ -15,11 +15,29 @@ env:
 jobs:
   build-release:
     runs-on: windows-latest
+    outputs:
+      channel: ${{ steps.release-channel.outputs.channel }}
+      prerelease: ${{ steps.release-channel.outputs.prerelease }}
     steps:
       - name: Checkout tagged source
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - name: Determine release channel
+        id: release-channel
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if ($tag -match '-') {
+            $channel = 'Beta'
+            $prerelease = 'true'
+          } else {
+            $channel = 'Stable'
+            $prerelease = 'false'
+          }
+          "channel=$channel" >> $env:GITHUB_OUTPUT
+          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -44,9 +62,7 @@ jobs:
           SIGNING_COMMAND: ${{ secrets.SIGNING_COMMAND }}
         run: |
           $tag = '${{ github.ref_name }}'
-          # The tag job creates a draft prerelease. Promotion to Stable is a
-          # GitHub Release state change and must not rebuild these binaries.
-          ./packaging/build.ps1 -Tag $tag -Channel Beta -Output ./dist -Commit '${{ github.sha }}' -BuildDate '${{ github.event.head_commit.timestamp }}'
+          ./packaging/build.ps1 -Tag $tag -Channel '${{ steps.release-channel.outputs.channel }}' -Output ./dist -Commit '${{ github.sha }}' -BuildDate '${{ github.event.head_commit.timestamp }}'
           if ($env:SIGNING_COMMAND) { & $env:SIGNING_COMMAND ./dist } else { Write-Output 'Signing disabled: SIGNING_COMMAND is unset.' }
 
       - name: Generate and validate checksums
@@ -131,7 +147,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
-          prerelease: true
+          prerelease: ${{ needs.build-release.outputs.prerelease }}
           files: |
             dist/wslc-tui-${{ github.ref_name }}-windows-amd64.msi
             dist/wslc-tui-${{ github.ref_name }}-windows-amd64.exe

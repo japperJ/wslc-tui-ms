@@ -12,6 +12,13 @@ Tag releases with `vX.Y.Z` SemVer. The workflow produces these deterministic ass
 
 The checksum manifest uses SHA-256 and covers the MSI, bootstrapper, portable ZIP, and policy file, but intentionally excludes itself. The policy schema is [`packaging/update-policy.schema.json`](../packaging/update-policy.schema.json).
 
+The release workflow derives the channel from the tag:
+
+- `v1.2.3` creates a Stable release.
+- `v1.2.3-beta.1` creates a Beta release.
+
+Any tag with a prerelease suffix is treated as Beta. The same channel is embedded in the binaries and applied to the GitHub release's `prerelease` flag.
+
 The updater helper is embedded in the portable ZIP and per-user MSI installation as `wslc-tui-updater.exe`; it is not a separate release asset.
 
 ## Local Build
@@ -56,4 +63,4 @@ source-only bundle that fails early with a missing-artifacts message.
 
 ## Channel Promotion
 
-The release workflow creates a draft with the selected prerelease state. GitHub release `prerelease=true` maps to Beta and `false` maps to Stable. Promoting a draft changes only that state: do not rebuild, rename, replace assets, or regenerate checksums.
+The workflow creates a draft whose channel matches the tag. GitHub release `prerelease=true` maps to Beta and `false` maps to Stable. If a draft is promoted without changing its channel, do not rebuild, rename, replace assets, or regenerate checksums.
