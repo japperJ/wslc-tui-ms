@@ -660,13 +660,13 @@ var AllCommands = map[string][]commands.Command{
 	},
 	"Session": {
 		{
-			Name:        "ls",
-			Full:        "wslc session ls",
+			Name:        "list",
+			Full:        "wslc system session list",
 			Category:    "Session",
 			Description: "List sessions",
-			Usage:       "wslc session ls [flags]",
+			Usage:       "wslc system session list [flags]",
 			Examples: []string{
-				"wslc session ls",
+				"wslc system session list",
 			},
 			Flags: []commands.Flag{
 				{Short: "", Long: "--format", Description: "Format the output using a Go template"},
@@ -676,12 +676,12 @@ var AllCommands = map[string][]commands.Command{
 		},
 		{
 			Name:        "enter",
-			Full:        "wslc session enter {name}",
+			Full:        "wslc system session enter {name}",
 			Category:    "Session",
 			Description: "Enter an existing session",
-			Usage:       "wslc session enter SESSION",
+			Usage:       "wslc system session enter SESSION",
 			Examples: []string{
-				"wslc session enter my-session",
+				"wslc system session enter my-session",
 			},
 			Flags:      []commands.Flag{},
 			Difficulty: "intermediate",
@@ -689,13 +689,13 @@ var AllCommands = map[string][]commands.Command{
 		},
 		{
 			Name:        "run",
-			Full:        "wslc session run {name}",
+			Full:        "wslc system session run {name}",
 			Category:    "Session",
 			Description: "Run a command in a session (creates default session if needed)",
-			Usage:       "wslc session run [flags] SESSION COMMAND [ARG...]",
+			Usage:       "wslc system session run [flags] SESSION COMMAND [ARG...]",
 			Examples: []string{
-				"wslc session run my-session echo hello",
-				"wslc session run --cpus 4 --memory 4096 my-session bash",
+				"wslc system session run my-session echo hello",
+				"wslc system session run --cpus 4 --memory 4096 my-session bash",
 			},
 			Flags: []commands.Flag{
 				{Short: "", Long: "--cpus", Description: "Number of CPUs for the session"},
@@ -707,12 +707,12 @@ var AllCommands = map[string][]commands.Command{
 		},
 		{
 			Name:        "shell",
-			Full:        "wslc session shell {name}",
+			Full:        "wslc system session shell {name}",
 			Category:    "Session",
 			Description: "Open a shell in a session",
-			Usage:       "wslc session shell [flags] SESSION",
+			Usage:       "wslc system session shell [flags] SESSION",
 			Examples: []string{
-				"wslc session shell my-session",
+				"wslc system session shell my-session",
 			},
 			Flags: []commands.Flag{
 				{Short: "", Long: "--cpus", Description: "Number of CPUs for the session"},
@@ -723,12 +723,12 @@ var AllCommands = map[string][]commands.Command{
 		},
 		{
 			Name:        "terminate",
-			Full:        "wslc session terminate {name}",
+			Full:        "wslc system session terminate {name}",
 			Category:    "Session",
 			Description: "Terminate a session and release resources",
-			Usage:       "wslc session terminate SESSION",
+			Usage:       "wslc system session terminate SESSION",
 			Examples: []string{
-				"wslc session terminate my-session",
+				"wslc system session terminate my-session",
 			},
 			Flags:      []commands.Flag{},
 			Difficulty: "advanced",
@@ -736,36 +736,6 @@ var AllCommands = map[string][]commands.Command{
 		},
 	},
 	"System": {
-		{
-			Name:        "info",
-			Full:        "wslc info",
-			Category:    "System",
-			Description: "Display system-wide information",
-			Usage:       "wslc info [flags]",
-			Examples: []string{
-				"wslc info",
-			},
-			Flags:      []commands.Flag{},
-			Difficulty: "beginner",
-			Tags:       []string{"info", "system", "details"},
-		},
-		{
-			Name:        "prune",
-			Full:        "wslc system prune",
-			Category:    "System",
-			Description: "Remove unused data (dangling images, stopped containers, unused networks)",
-			Usage:       "wslc system prune [flags]",
-			Examples: []string{
-				"wslc system prune",
-				"wslc system prune -f",
-			},
-			Flags: []commands.Flag{
-				{Short: "-f", Long: "--force", Description: "Do not prompt for confirmation"},
-				{Short: "", Long: "--volumes", Description: "Prune volumes too"},
-			},
-			Difficulty: "advanced",
-			Tags:       []string{"cleanup", "prune", "remove", "unused", "disk"},
-		},
 		{
 			Name:        "version",
 			Full:        "wslc version",
@@ -903,14 +873,12 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 		"Volume/inspect": {Arguments: []commands.Argument{a("volumes", true, true)}, Options: []commands.Option{t("--format")}},
 		"Volume/prune":   {Options: []commands.Option{b("--force")}},
 
-		"Session/ls":        {Options: []commands.Option{t("--format")}},
+		"Session/list":      {Options: []commands.Option{t("--format")}},
 		"Session/enter":     {Arguments: []commands.Argument{a("session", true, false)}},
 		"Session/run":       {Arguments: []commands.Argument{a("session", true, false), a("command", true, true)}, Options: []commands.Option{t("--cpus"), t("--memory"), t("--storage")}},
 		"Session/shell":     {Arguments: []commands.Argument{a("session", true, false)}, Options: []commands.Option{t("--cpus"), t("--memory")}},
 		"Session/terminate": {Arguments: []commands.Argument{a("session", true, false)}},
 
-		"System/info":     {},
-		"System/prune":    {Options: []commands.Option{b("--force"), b("--volumes")}},
 		"System/version":  {},
 		"Registry/login":  {Arguments: []commands.Argument{a("server", false, false)}, Options: []commands.Option{t("--username"), t("--password"), b("--password-stdin")}},
 		"Registry/logout": {Arguments: []commands.Argument{a("server", false, false)}},

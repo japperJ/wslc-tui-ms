@@ -143,7 +143,7 @@ The built-in catalog currently covers:
 - Network creation, inspection, connection, disconnection, and cleanup
 - Volume creation, inspection, removal, and cleanup
 - Session listing, entering, running, shell access, and termination
-- System information, version, and cleanup operations
+- WSLC version information
 - Registry login and logout
 
 The catalog is defined in [`internal/data/commands.go`](internal/data/commands.go), with command schemas used to build and validate guided forms.

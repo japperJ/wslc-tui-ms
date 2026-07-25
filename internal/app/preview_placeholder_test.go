@@ -112,8 +112,8 @@ func TestConfirmationEnterExecutesPendingCommand(t *testing.T) {
 func TestConfirmationEscCancelsPendingCommand(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	m.currentView = viewConfirm
-	m.previewCmd = &commands.Command{Full: "wslc system prune", Difficulty: "advanced"}
-	m.pendingCommand = "wslc system prune"
+	m.previewCmd = &commands.Command{Full: "wslc container prune", Difficulty: "advanced"}
+	m.pendingCommand = "wslc container prune"
 	m.pendingDifficulty = "advanced"
 
 	updated, _ := m.handleConfirmationKey(tea.KeyMsg{Type: tea.KeyEsc})

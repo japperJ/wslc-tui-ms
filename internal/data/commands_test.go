@@ -75,7 +75,7 @@ func TestSessionCategoryExists(t *testing.T) {
 		t.Error("Session category has no commands")
 	}
 
-	expectedCmds := map[string]bool{"ls": false, "enter": false, "run": false, "shell": false, "terminate": false}
+	expectedCmds := map[string]bool{"list": false, "enter": false, "run": false, "shell": false, "terminate": false}
 	for _, cmd := range sessionCmds {
 		if _, ok := expectedCmds[cmd.Name]; ok {
 			expectedCmds[cmd.Name] = true
@@ -85,6 +85,22 @@ func TestSessionCategoryExists(t *testing.T) {
 		if !found {
 			t.Errorf("Session category missing command %q", name)
 		}
+	}
+}
+
+func TestSessionCommandsUseSystemNamespace(t *testing.T) {
+	for _, command := range GetCommandsByCategory("Session") {
+		wantPrefix := "wslc system session " + command.Name
+		if !strings.HasPrefix(command.Full, wantPrefix) {
+			t.Errorf("session command %q = %q, want prefix %q", command.Name, command.Full, wantPrefix)
+		}
+	}
+}
+
+func TestSystemCategoryContainsOnlySupportedCommands(t *testing.T) {
+	commandsByCategory := GetCommandsByCategory("System")
+	if len(commandsByCategory) != 1 || commandsByCategory[0].Full != "wslc version" {
+		t.Fatalf("system commands = %#v, want only wslc version", commandsByCategory)
 	}
 }
 

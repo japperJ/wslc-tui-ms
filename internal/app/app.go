@@ -2608,7 +2608,7 @@ for managing Linux containers without Docker Desktop.
 Basic Commands:
   wslc container ls              List running containers
   wslc image ls                  List available images
-  wslc info                      Show system information
+  wslc version                   Show the WSLC version
 
 Quick Start:
   1. Pull an image:     wslc pull ubuntu:latest
@@ -2716,20 +2716,20 @@ WSLC sessions are named containers with configurable storage and
 resource limits. A default session is created on demand.
 
 List Sessions:
-  wslc session ls              List all sessions
+  wslc system session list       List all sessions
 
 Enter a Session:
-  wslc session enter my-session     Connect to session
+  wslc system session enter my-session     Connect to session
 
 Run in Session:
-  wslc session run my-session echo hello
-  wslc session run --cpus 4 --memory 4096 my-session bash
+  wslc system session run my-session echo hello
+  wslc system session run --cpus 4 --memory 4096 my-session bash
 
 Open Shell:
-  wslc session shell my-session     Interactive shell
+  wslc system session shell my-session     Interactive shell
 
 Terminate:
-  wslc session terminate my-session     Release session resources
+  wslc system session terminate my-session     Release session resources
 
 Session Resources:
   Default storage: 32 GB per session
@@ -2739,20 +2739,10 @@ Session Resources:
 	case "System & Maintenance":
 		return `SYSTEM & MAINTENANCE
 
-System Info:
-  wslc info                  Show system information
-
-Cleanup:
-  wslc system prune          Remove all unused data
-  wslc system prune -f       Skip confirmation
-  wslc system prune --volumes  Also prune volumes
-
 Version:
   wslc version               Show wslc version
 
 Tips:
-  - Run cleanup regularly to free disk space
-  - Check 'wslc info' for system status
   - Use 'wslc container prune' for just stopped containers
   - WSLC runs natively on WSL 2.9.3+ — no Docker daemon needed`
 	}
