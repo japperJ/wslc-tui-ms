@@ -105,6 +105,9 @@ Unknown commands typed into the search field are passed through to the host shel
 | `Esc` | Unfocus search or go back |
 | `Ctrl+C` | Quit |
 
+While any text field is focused, printable characters are entered as text;
+browser shortcuts such as update actions do not interrupt editing.
+
 ### Forms And Output
 
 | Key | Action |

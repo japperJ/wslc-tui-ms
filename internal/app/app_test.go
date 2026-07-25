@@ -120,33 +120,31 @@ func TestManualUpdateCheckLeavesReadableCompletionStatus(t *testing.T) {
 	}
 }
 
-func TestFocusedCommandSearchUStartsManualUpdateCheck(t *testing.T) {
+func TestFocusedCommandSearchAcceptsLowercaseUpdateShortcutCharacter(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))}
-	inputBefore := m.inputValue
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
 	m = updated.(model)
-	if cmd == nil || !m.updateChecking {
-		t.Fatal("focused u should start a manual update check")
+	if cmd != nil || m.updateChecking {
+		t.Fatal("focused u should remain text input")
 	}
-	if m.inputValue != inputBefore {
-		t.Fatalf("focused u changed search input to %q", m.inputValue)
+	if m.inputValue != "u" || m.textInput.Value() != "u" {
+		t.Fatalf("focused u was not entered into search input: input=%q text=%q", m.inputValue, m.textInput.Value())
 	}
 }
 
-func TestFocusedCommandSearchUppercaseUStartsManualUpdateCheck(t *testing.T) {
+func TestFocusedCommandSearchAcceptsUppercaseUpdateShortcutCharacter(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))}
-	inputBefore := m.inputValue
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'U'}})
 	m = updated.(model)
-	if cmd == nil || !m.updateChecking {
-		t.Fatal("focused U should start a manual update check")
+	if cmd != nil || m.updateChecking {
+		t.Fatal("focused U should remain text input")
 	}
-	if m.inputValue != inputBefore {
-		t.Fatalf("focused U changed search input to %q", m.inputValue)
+	if m.inputValue != "U" || m.textInput.Value() != "U" {
+		t.Fatalf("focused U was not entered into search input: input=%q text=%q", m.inputValue, m.textInput.Value())
 	}
 }
 
@@ -198,18 +196,12 @@ func TestCommandBrowserChannelShortcutTogglesAndFindsBetaPrerelease(t *testing.T
 		Distribution:   "portable",
 	}
 	m.updateChannel = update.Stable
-	m.inputFocused = true
-	m.textInput.Focus()
-	m.inputValue = "wslc"
-	m.textInput.SetValue(m.inputValue)
-
+	m.inputFocused = false
+	m.textInput.Blur()
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
 	m = updated.(model)
 	if cmd == nil || m.updateChannel != update.Beta {
 		t.Fatalf("channel shortcut did not start beta check: channel=%q cmd=%v", m.updateChannel, cmd != nil)
-	}
-	if m.inputValue != "wslc" || m.textInput.Value() != "wslc" {
-		t.Fatalf("channel shortcut changed search input to %q", m.inputValue)
 	}
 	if !strings.Contains(m.channelStatus, "Beta") || !strings.Contains(m.renderCommandsView(), "Beta") {
 		t.Fatalf("active channel status is not visible: %q", m.channelStatus)
@@ -229,20 +221,29 @@ func TestCommandBrowserChannelShortcutTogglesAndFindsBetaPrerelease(t *testing.T
 	}
 }
 
-func TestFocusedCommandBrowserUppercaseChannelShortcutIsConsumed(t *testing.T) {
+func TestFocusedCommandSearchAcceptsChannelShortcutCharacters(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json"))}
 	m.updateChannel = update.Beta
-	m.inputValue = "wslc"
-	m.textInput.SetValue(m.inputValue)
+	m.inputFocused = true
+	m.textInput.Focus()
 
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
 	m = updated.(model)
-	if cmd == nil || m.updateChannel != update.Stable {
-		t.Fatalf("uppercase channel shortcut did not toggle: channel=%q cmd=%v", m.updateChannel, cmd != nil)
+	if cmd != nil || m.updateChannel != update.Beta {
+		t.Fatalf("focused c triggered channel action: channel=%q cmd=%v", m.updateChannel, cmd != nil)
 	}
-	if m.inputValue != "wslc" || m.textInput.Value() != "wslc" {
-		t.Fatalf("uppercase channel shortcut changed search input to %q", m.inputValue)
+	if m.inputValue != "c" || m.textInput.Value() != "c" {
+		t.Fatalf("focused c was not entered into search input: input=%q text=%q", m.inputValue, m.textInput.Value())
+	}
+
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
+	m = updated.(model)
+	if cmd != nil || m.updateChannel != update.Beta {
+		t.Fatalf("focused C triggered channel action: channel=%q cmd=%v", m.updateChannel, cmd != nil)
+	}
+	if m.inputValue != "cC" || m.textInput.Value() != "cC" {
+		t.Fatalf("focused C was not entered into search input: input=%q text=%q", m.inputValue, m.textInput.Value())
 	}
 }
 

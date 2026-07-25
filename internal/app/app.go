@@ -643,7 +643,7 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		return m, tea.Quit
 	case "q":
-		if !(m.currentView == viewCommands && m.inputFocused) {
+		if !m.textInputFocused() {
 			return m, tea.Quit
 		}
 	}
@@ -668,6 +668,19 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m model) textInputFocused() bool {
+	switch m.currentView {
+	case viewCommands:
+		return m.inputFocused || m.textInput.Focused()
+	case viewForm:
+		return m.formInput.Focused()
+	case viewPreview:
+		return m.phInput.Focused()
+	default:
+		return false
+	}
 }
 
 func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
@@ -1018,10 +1031,6 @@ func formatUpdateResult(result update.Result) string {
 func (m model) handleCommandsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.inputFocused || m.textInput.Focused() {
 		switch msg.String() {
-		case "c", "C":
-			return m, m.toggleUpdateChannel()
-		case "u", "U":
-			return m, m.startUpdateCheck(true)
 		case "esc":
 			m.textInput.Blur()
 			m.inputFocused = false
