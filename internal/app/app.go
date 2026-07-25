@@ -17,6 +17,7 @@ import (
 	"wslc-tui-ms/internal/buildinfo"
 	"wslc-tui-ms/internal/commands"
 	"wslc-tui-ms/internal/data"
+	"wslc-tui-ms/internal/discovery"
 	"wslc-tui-ms/internal/platform"
 	"wslc-tui-ms/internal/settings"
 	"wslc-tui-ms/internal/ui"
@@ -39,6 +40,7 @@ const (
 	viewOutput
 	viewLearn
 	viewUpdate
+	viewPicker
 )
 
 const (
@@ -165,6 +167,19 @@ type model struct {
 	pendingArgs      []string
 	confirmationView view
 
+	// Resource picker state. Picker values are copied into form argument rows;
+	// the separate row markers distinguish them from explicitly typed values.
+	pickerField      int
+	pickerType       commands.ResourceType
+	pickerFilter     string
+	pickerCandidates []string
+	pickerSelected   []string
+	pickerIndex      int
+	pickerLoading    bool
+	pickerError      error
+	pickerDisabled   bool
+	pickerGeneration int
+
 	// Placeholder editing (in preview)
 	placeholders  []string
 	phValues      map[string]string
@@ -225,6 +240,7 @@ type model struct {
 	updateHandoff  bool
 	updateStatus   string
 	updateLaunch   func(update.Handoff) error
+	discovery      discovery.Discovery
 }
 
 type clickRegion struct {
@@ -246,6 +262,14 @@ type updateResultMsg struct {
 }
 
 type updateInstallMsg struct{ err error }
+
+type pickerRefreshMsg struct {
+	field      int
+	resource   commands.ResourceType
+	generation int
+	values     []string
+	err        error
+}
 
 func NewModelForTest(width, height int) model {
 	m := NewModel()
@@ -309,10 +333,12 @@ func NewModel() model {
 			"Network & Volume",
 			"Sessions",
 			"System & Maintenance",
+			"Registry",
 		},
 		updateChannel: channel,
 		updateService: update.Service{Client: update.NewGitHubClient("japperJ", "wslc-tui-ms", nil), Store: store, Distribution: buildinfo.Distribution, CurrentVersion: buildinfo.Version},
 		updateLaunch:  launchUpdater,
+		discovery:     discovery.NewClient(nil),
 	}
 	if result, err := update.ConsumeResult(filepath.Join(filepath.Dir(store.Path), "update-result.json")); err == nil {
 		m.updateStatus = formatUpdateResult(result)
@@ -399,6 +425,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, tea.Quit
+	case pickerRefreshMsg:
+		if m.currentView != viewPicker || msg.field != m.pickerField || msg.resource != m.pickerType || msg.generation != m.pickerGeneration {
+			return m, nil
+		}
+		m.pickerLoading = false
+		m.pickerError = msg.err
+		m.pickerDisabled = msg.err != nil
+		m.pickerCandidates = append([]string(nil), msg.values...)
+		m.pickerIndex = 0
+		if msg.err == nil && m.form != nil {
+			m.form.validationError = m.form.validatePickerValues(m.pickerField, msg.values)
+		}
+		return m, nil
 
 	case tea.KeyMsg:
 		if m.splashActive {
@@ -616,6 +655,8 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handlePreviewKey(msg)
 	case viewForm:
 		return m.handleFormKey(msg)
+	case viewPicker:
+		return m.handlePickerKey(msg)
 	case viewConfirm:
 		return m.handleConfirmationKey(msg)
 	case viewOutput:
@@ -1094,6 +1135,113 @@ func (m *model) openForm(command commands.Command) {
 	m.formViewport.GotoTop()
 }
 
+func (m *model) openPicker() tea.Cmd {
+	if m.form == nil || m.form.focusedField < 0 || m.form.focusedField >= len(m.form.argumentRows) {
+		return nil
+	}
+	field := m.form.focusedField
+	argument, ok := m.form.pickerArgument(field)
+	if !ok {
+		return nil
+	}
+	field = m.form.pickerArgumentStart(field)
+	m.pickerField = field
+	m.pickerType = argument.ResourceType
+	m.pickerFilter = ""
+	m.pickerCandidates = nil
+	m.pickerSelected = m.form.pickerValues(field)
+	m.pickerIndex = 0
+	m.pickerLoading = true
+	m.pickerError = nil
+	m.pickerDisabled = false
+	m.pickerGeneration++
+	m.currentView = viewPicker
+	m.formInput.SetValue("")
+	m.formInput.Focus()
+	generation := m.pickerGeneration
+	resource := m.pickerType
+	field = m.pickerField
+	client := m.discovery
+	return func() tea.Msg {
+		if client == nil {
+			client = discovery.NewClient(nil)
+		}
+		values, err := client.Discover(context.Background(), resource)
+		return pickerRefreshMsg{field: field, resource: resource, generation: generation, values: values, err: err}
+	}
+}
+
+func (m model) filteredPickerCandidates() []string {
+	if m.pickerFilter == "" {
+		return append([]string(nil), m.pickerCandidates...)
+	}
+	filter := strings.ToLower(m.pickerFilter)
+	values := make([]string, 0, len(m.pickerCandidates))
+	for _, value := range m.pickerCandidates {
+		if strings.Contains(strings.ToLower(value), filter) {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+func (m *model) togglePickerSelection(value string) {
+	for index, selected := range m.pickerSelected {
+		if selected == value {
+			m.pickerSelected = append(m.pickerSelected[:index], m.pickerSelected[index+1:]...)
+			return
+		}
+	}
+	if !m.form.commandSchema.Arguments[m.pickerField].Repeatable {
+		m.pickerSelected = []string{value}
+		return
+	}
+	m.pickerSelected = append(m.pickerSelected, value)
+}
+
+func (m model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.form == nil {
+		return m, nil
+	}
+	visible := m.filteredPickerCandidates()
+	switch msg.String() {
+	case "esc":
+		m.currentView = viewForm
+		m.syncFormInput()
+		return m, nil
+	case "up", "k":
+		if m.pickerIndex > 0 {
+			m.pickerIndex--
+		}
+	case "down", "j":
+		if m.pickerIndex < len(visible)-1 {
+			m.pickerIndex++
+		}
+	case " ":
+		if !m.pickerDisabled && len(visible) > 0 {
+			m.togglePickerSelection(visible[m.pickerIndex])
+		}
+	case "enter":
+		if m.pickerLoading || m.pickerDisabled {
+			return m, nil
+		}
+		m.form.setPickerValues(m.pickerField, m.pickerSelected)
+		m.form.validationError = nil
+		m.currentView = viewForm
+		m.syncFormInput()
+		return m, nil
+	default:
+		if m.formInput.Focused() {
+			var cmd tea.Cmd
+			m.formInput, cmd = m.formInput.Update(msg)
+			m.pickerFilter = m.formInput.Value()
+			m.pickerIndex = 0
+			return m, cmd
+		}
+	}
+	return m, nil
+}
+
 func formCommandBase(command string) []string {
 	fields := strings.Fields(command)
 	for i, field := range fields {
@@ -1165,6 +1313,29 @@ func (m *model) formBuild() commands.BuildResult {
 	return result
 }
 
+func (m *model) revalidatePickerSelections() error {
+	if m.form == nil || m.discovery == nil {
+		return nil
+	}
+	for field := range m.form.commandSchema.Arguments {
+		values := m.form.pickerValues(field)
+		if len(values) == 0 {
+			continue
+		}
+		if len(m.form.pickerRows) == 0 {
+			continue
+		}
+		available, err := m.discovery.Discover(context.Background(), m.form.commandSchema.Arguments[field].ResourceType)
+		if err != nil {
+			return fmt.Errorf("could not validate %q: %w", m.form.commandSchema.Arguments[field].Name, err)
+		}
+		if err := m.form.validatePickerValues(field, available); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.form == nil {
 		return m, nil
@@ -1176,6 +1347,8 @@ func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.formCommand = nil
 		m.clearPendingConfirmation()
 		return m, nil
+	case "p":
+		return m, m.openPicker()
 	case "tab", "down":
 		m.form.moveFocus(1)
 		m.syncFormInput()
@@ -1216,6 +1389,10 @@ func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "enter":
+		if err := m.revalidatePickerSelections(); err != nil {
+			m.form.validationError = err
+			return m, nil
+		}
 		result := m.formBuild()
 		if len(result.Errors) > 0 {
 			m.form.validationError = result.Errors[0]
@@ -1237,6 +1414,9 @@ func (m model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		if m.formInput.Focused() {
+			if m.form.focusedField < len(m.form.argumentRows) {
+				m.form.clearPickerRow(m.form.focusedField)
+			}
 			var cmd tea.Cmd
 			m.formInput, cmd = m.formInput.Update(msg)
 			value := m.formInput.Value()
@@ -1354,6 +1534,14 @@ func (m model) handlePreviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleConfirmationKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter", "y", "Y":
+		if m.confirmationView == viewForm {
+			if err := m.revalidatePickerSelections(); err != nil {
+				m.form.validationError = err
+				m.clearPendingConfirmation()
+				m.currentView = viewForm
+				return m, nil
+			}
+		}
 		command := m.pendingCommand
 		args := m.pendingArgs
 		difficulty := m.pendingDifficulty
@@ -1523,6 +1711,8 @@ func (m model) View() string {
 		b.WriteString(m.renderPreviewView())
 	case viewForm:
 		b.WriteString(m.renderFormView())
+	case viewPicker:
+		b.WriteString(m.renderPickerView())
 	case viewConfirm:
 		b.WriteString(m.renderConfirmationView())
 	case viewOutput:
@@ -2182,6 +2372,51 @@ func (m model) renderFormView() string {
 	return ui.CardStyle.Width(m.width - 2).Render(header + "\n" + content)
 }
 
+func (m model) renderPickerView() string {
+	if m.form == nil {
+		return "No form selected"
+	}
+	values := m.filteredPickerCandidates()
+	lines := []string{
+		ui.PickerHeaderStyle.Render("  RESOURCE PICKER: " + string(m.pickerType)),
+		"  " + ui.InputPromptStyle.Render("Filter: ") + m.formInput.View(),
+		"",
+	}
+	if m.pickerLoading {
+		lines = append(lines, "  "+ui.PreviewDefaultStyle.Render("Loading resources..."))
+	} else if m.pickerError != nil {
+		lines = append(lines, "  "+ui.PlaceholderWarnStyle.Render("Discovery failed: "+m.pickerError.Error()))
+		lines = append(lines, "  "+ui.PreviewDefaultStyle.Render("Type a value instead, then Esc to return."))
+	} else if len(values) == 0 {
+		lines = append(lines, "  "+ui.PreviewDefaultStyle.Render("No matching resources"))
+	} else {
+		for index, value := range values {
+			selected := false
+			for _, candidate := range m.pickerSelected {
+				if candidate == value {
+					selected = true
+					break
+				}
+			}
+			marker := "  "
+			if index == m.pickerIndex {
+				marker = ui.CmdCursorStyle.Render("▸ ")
+			}
+			check := "[ ]"
+			if selected {
+				check = "[x]"
+			}
+			lines = append(lines, marker+check+" "+value)
+		}
+	}
+	selected := "none"
+	if len(m.pickerSelected) > 0 {
+		selected = strings.Join(m.pickerSelected, ", ")
+	}
+	lines = append(lines, "", ui.SectionLabelStyle.Render("  SELECTED"), "  "+ui.PickerSelectedStyle.Render(selected), "", ui.PreviewDefaultStyle.Render("Space selects one or more values. Typed text remains allowed."))
+	return ui.CardActiveStyle.Width(m.width - 2).Render(ui.PreviewHeaderStyle.Render("  ▓  PICK RESOURCE") + "\n" + lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
 func (m model) renderConfirmationView() string {
 	_, contentHeight := m.calculateLayout()
 	innerHeight := contentHeight - 2
@@ -2461,8 +2696,14 @@ func (m model) renderStatusBar(contentRowY int) string {
 		}
 	} else if m.currentView == viewForm {
 		parts = append(parts, renderKeyHint("↑↓/Tab", "Navigate"))
+		parts = append(parts, renderKeyHint("p", "Pick resource"))
 		parts = append(parts, renderKeyHint("Enter", "Submit"))
 		parts = append(parts, renderKeyHint("Esc", "Back"))
+	} else if m.currentView == viewPicker {
+		parts = append(parts, renderKeyHint("↑↓", "Navigate"))
+		parts = append(parts, renderKeyHint("Space", "Select"))
+		parts = append(parts, renderKeyHint("Enter", "Use"))
+		parts = append(parts, renderKeyHint("Esc", "Cancel"))
 	} else if m.currentView == viewConfirm {
 		parts = append(parts, renderKeyHint("Enter/Y", "Run"))
 		parts = append(parts, renderKeyHint("Esc/N", "Cancel"))
@@ -2651,9 +2892,14 @@ Lifecycle:
   wslc kill CONTAINER      Force stop with signal
 
 Cleanup:
-  wslc remove CONTAINER        Remove a container
-  wslc remove -f CONTAINER     Force remove
-  wslc container prune         Remove all stopped containers`
+   wslc remove CONTAINER        Remove a container
+   wslc remove -f CONTAINER     Force remove
+   wslc container prune         Remove all stopped containers
+
+Copy Container Files:
+  wslc container cp ./backup.tar app:/tmp/backup.tar
+  wslc container cp app:/tmp/backup.tar ./backup.tar
+  wslc container cp --archive SRC_PATH DEST_PATH`
 
 	case "Image Management":
 		return `IMAGE MANAGEMENT
@@ -2683,8 +2929,10 @@ Build Images:
   wslc build --label env=prod .        With metadata labels
 
 Save/Load:
-  wslc save -o backup.tar IMAGE        Save to tar
-  wslc load -i backup.tar              Load from tar`
+   wslc save -o backup.tar IMAGE        Save to tar
+  wslc load -i backup.tar              Load from tar
+
+`
 
 	case "Network & Volume":
 		return `NETWORK & VOLUME MANAGEMENT
@@ -2730,7 +2978,7 @@ Open Shell:
   wslc system session shell my-session     Interactive shell
 
 Terminate:
-  wslc system session terminate my-session     Release session resources
+   wslc system session terminate my-session     Release session resources
 
 Session Resources:
   Default storage: 32 GB per session
@@ -2741,11 +2989,25 @@ Session Resources:
 		return `SYSTEM & MAINTENANCE
 
 Version:
-  wslc version               Show wslc version
+   wslc version               Show wslc version
 
 Tips:
   - Use 'wslc container prune' for just stopped containers
   - WSLC runs natively on WSL 2.9.3+ — no Docker daemon needed`
+
+	case "Registry":
+		return `REGISTRY MANAGEMENT
+
+Login:
+  wslc login SERVER                    Authenticate to a registry
+  wslc login --password-stdin SERVER   Read the password securely
+
+Logout:
+  wslc logout SERVER                   Remove registry credentials
+
+Security:
+  Avoid placing registry passwords directly in command arguments or shell
+  history. Prefer --password-stdin when supported.`
 	}
 
 	return "No content available for this topic."

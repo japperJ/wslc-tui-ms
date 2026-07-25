@@ -158,6 +158,13 @@ var (
 	PlaceholderLabelStyle = lipgloss.NewStyle().
 				Foreground(ColorCyan)
 
+	PickerHeaderStyle = lipgloss.NewStyle().
+				Foreground(ColorPurple).
+				Bold(true)
+
+	PickerSelectedStyle = lipgloss.NewStyle().
+				Foreground(ColorGreen)
+
 	PlaceholderWarnStyle = lipgloss.NewStyle().
 				Foreground(ColorRed).
 				Bold(true)

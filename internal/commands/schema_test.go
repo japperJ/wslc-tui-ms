@@ -43,6 +43,33 @@ func TestCommandSchemaPreservesOrderedArguments(t *testing.T) {
 	}
 }
 
+func TestResourceMetadataPreservesPickerContract(t *testing.T) {
+	schema := CommandSchema{Arguments: []Argument{
+		{Name: "container", ResourceType: ResourceTypeContainer, PickerEnabled: true},
+		{Name: "containers", Repeatable: true, ResourceType: ResourceTypeContainer, PickerEnabled: true},
+	}}
+
+	if schema.Arguments[0].ResourceType != ResourceTypeContainer || !schema.Arguments[0].PickerEnabled || schema.Arguments[0].Repeatable {
+		t.Fatalf("scalar resource metadata = %#v", schema.Arguments[0])
+	}
+	if schema.Arguments[1].ResourceType != ResourceTypeContainer || !schema.Arguments[1].PickerEnabled || !schema.Arguments[1].Repeatable {
+		t.Fatalf("repeatable resource metadata = %#v", schema.Arguments[1])
+	}
+}
+
+func TestUnknownOrEmptyResourceTypeIsTextOnly(t *testing.T) {
+	arguments := []Argument{
+		{Name: "free-text", PickerEnabled: true},
+		{Name: "unknown", ResourceType: ResourceType("workspace"), PickerEnabled: true},
+	}
+
+	for _, argument := range arguments {
+		if argument.PickerAvailable() {
+			t.Errorf("%q must be text-only: %#v", argument.Name, argument)
+		}
+	}
+}
+
 func TestCommandSchemaPreservesOrderedOptions(t *testing.T) {
 	schema := CommandSchema{
 		Options: []Option{

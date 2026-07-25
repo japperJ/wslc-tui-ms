@@ -1,6 +1,9 @@
 package app
 
-import "wslc-tui-ms/internal/commands"
+import (
+	"fmt"
+	"wslc-tui-ms/internal/commands"
+)
 
 // formOption is an editable copy of one schema option. The schema remains the
 // source of truth for ordering and validation metadata.
@@ -22,10 +25,11 @@ type formState struct {
 	focusedField    int
 	validationError error
 	buildResult     commands.BuildResult
+	pickerRows      map[int]bool
 }
 
 func newFormState(command commands.Command, remembered map[string]string) *formState {
-	form := &formState{commandKey: commandIdentity(command)}
+	form := &formState{commandKey: commandIdentity(command), pickerRows: make(map[int]bool)}
 	if command.Schema == nil {
 		return form
 	}
@@ -96,6 +100,102 @@ func (f *formState) setOption(flag, value string) bool {
 		}
 	}
 	return false
+}
+
+func (f *formState) pickerArgument(field int) (commands.Argument, bool) {
+	if field < 0 || field >= len(f.argumentRows) || len(f.commandSchema.Arguments) == 0 {
+		return commands.Argument{}, false
+	}
+	if field >= len(f.commandSchema.Arguments) {
+		argument := f.commandSchema.Arguments[len(f.commandSchema.Arguments)-1]
+		return argument, argument.Repeatable && argument.PickerAvailable()
+	}
+	argument := f.commandSchema.Arguments[field]
+	return argument, argument.PickerAvailable()
+}
+
+func (f *formState) pickerArgumentStart(field int) int {
+	if field >= 0 && field < len(f.commandSchema.Arguments) {
+		return field
+	}
+	if len(f.commandSchema.Arguments) > 0 && f.commandSchema.Arguments[len(f.commandSchema.Arguments)-1].Repeatable {
+		return len(f.commandSchema.Arguments) - 1
+	}
+	return field
+}
+
+func (f *formState) pickerValues(field int) []string {
+	argument, ok := f.pickerArgument(field)
+	if !ok {
+		return nil
+	}
+	values := make([]string, 0)
+	for row := field; row < len(f.argumentRows); row++ {
+		if !argument.Repeatable && row > field {
+			break
+		}
+		if f.pickerRows[row] && len(f.argumentRows[row]) == 1 && f.argumentRows[row][0] != "" {
+			values = append(values, f.argumentRows[row][0])
+		}
+	}
+	return values
+}
+
+func (f *formState) clearPickerSelection(field int) {
+	argument, ok := f.pickerArgument(field)
+	if !ok {
+		return
+	}
+	if argument.Repeatable {
+		for row := field; row < len(f.argumentRows); row++ {
+			delete(f.pickerRows, row)
+		}
+		return
+	}
+	delete(f.pickerRows, field)
+}
+
+func (f *formState) clearPickerRow(row int) {
+	delete(f.pickerRows, row)
+}
+
+func (f *formState) setPickerValues(field int, values []string) bool {
+	argument, ok := f.pickerArgument(field)
+	if !ok {
+		return false
+	}
+	f.clearPickerSelection(field)
+	if argument.Repeatable {
+		f.argumentRows = append(f.argumentRows[:field], make([][]string, 0, len(values))...)
+		for _, value := range values {
+			f.argumentRows = append(f.argumentRows, []string{value})
+			f.pickerRows[len(f.argumentRows)-1] = true
+		}
+		return true
+	}
+	if len(f.argumentRows) <= field {
+		return false
+	}
+	if len(values) == 0 {
+		f.argumentRows[field] = []string{""}
+		return true
+	}
+	f.argumentRows[field] = []string{values[0]}
+	f.pickerRows[field] = true
+	return true
+}
+
+func (f *formState) validatePickerValues(field int, available []string) error {
+	allowed := make(map[string]bool, len(available))
+	for _, value := range available {
+		allowed[value] = true
+	}
+	for _, value := range f.pickerValues(field) {
+		if !allowed[value] {
+			return fmt.Errorf("selected %q for argument %q is no longer available", value, f.commandSchema.Arguments[field].Name)
+		}
+	}
+	return nil
 }
 
 func (f *formState) addRepeatableRow() bool {

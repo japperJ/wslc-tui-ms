@@ -35,7 +35,7 @@ func TestGetAllCommandsNonEmpty(t *testing.T) {
 }
 
 func TestNoNerdctlSpecificCommands(t *testing.T) {
-	removedCommands := []string{"restart", "healthcheck", "diff", "commit", "rename", "update", "wait", "pause", "unpause", "port", "history", "convert", "encrypt", "decrypt"}
+	removedCommands := []string{"restart", "healthcheck", "diff", "commit", "rename", "update", "wait", "pause", "unpause", "port", "convert", "encrypt", "decrypt"}
 	removedCategories := []string{"Builder", "Namespace", "Compose"}
 
 	all := GetAllCommands()
@@ -97,10 +97,28 @@ func TestSessionCommandsUseSystemNamespace(t *testing.T) {
 	}
 }
 
-func TestSystemCategoryContainsOnlySupportedCommands(t *testing.T) {
+func TestSessionListUsesSupportedVerboseOption(t *testing.T) {
+	list := catalogCommand(t, "Session", "list")
+	if len(list.Flags) != 1 || list.Flags[0].Long != "--verbose" {
+		t.Fatalf("session list flags = %#v, want only --verbose", list.Flags)
+	}
+	if list.Schema == nil || len(list.Schema.Options) != 1 || list.Schema.Options[0].Flag != "--verbose" {
+		t.Fatalf("session list schema options = %#v, want only --verbose", list.Schema)
+	}
+}
+
+func TestSystemCategoryContainsSupportedCommands(t *testing.T) {
 	commandsByCategory := GetCommandsByCategory("System")
-	if len(commandsByCategory) != 1 || commandsByCategory[0].Full != "wslc version" {
-		t.Fatalf("system commands = %#v, want only wslc version", commandsByCategory)
+	want := map[string]bool{"version": false}
+	for _, command := range commandsByCategory {
+		if _, ok := want[command.Name]; ok {
+			want[command.Name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("system category missing command %q", name)
+		}
 	}
 }
 
@@ -122,6 +140,50 @@ func TestGPUFlagOnRun(t *testing.T) {
 		}
 	}
 	t.Error("Container run command not found")
+}
+
+func TestInstalledWSLCCommandsAreCataloged(t *testing.T) {
+	expected := map[string][]string{
+		"Container": {"create", "start", "stop", "kill", "run", "exec", "attach", "ls", "inspect", "logs", "stats", "prune", "rm", "cp", "export"},
+		"Image":     {"build", "import", "load", "pull", "push", "ls", "inspect", "rm", "prune"},
+		"Network":   {"create", "rm", "prune", "ls", "inspect", "connect", "disconnect"},
+		"Volume":    {"create", "rm", "prune", "ls", "inspect"},
+		"Session":   {"list", "enter", "run", "shell", "terminate"},
+		"System":    {"version"},
+		"Registry":  {"login", "logout"},
+	}
+
+	for category, names := range expected {
+		catalog := GetCommandsByCategory(category)
+		found := make(map[string]bool, len(catalog))
+		for _, command := range catalog {
+			found[command.Name] = true
+		}
+		for _, name := range names {
+			if !found[name] {
+				t.Errorf("category %q missing WSLC reference command %q", category, name)
+			}
+		}
+	}
+}
+
+func TestUnsupportedWSLCCommandsAreNotCataloged(t *testing.T) {
+	unsupported := map[string][]string{
+		"Image":    {"history"},
+		"Session":  {"start", "stop", "attach"},
+		"System":   {"info", "df", "prune", "events"},
+		"Registry": {"list"},
+	}
+
+	for category, names := range unsupported {
+		for _, command := range GetCommandsByCategory(category) {
+			for _, name := range names {
+				if command.Name == name {
+					t.Errorf("category %q contains unsupported command %q", category, name)
+				}
+			}
+		}
+	}
 }
 
 func TestStatsSchemaUsesSupportedOptions(t *testing.T) {
@@ -188,6 +250,61 @@ func TestCatalogSchemasHaveUniqueOrderedArguments(t *testing.T) {
 			if argument.Repeatable && index != len(command.Schema.Arguments)-1 {
 				t.Errorf("%s has non-terminal repeatable argument %q", command.Full, argument.Name)
 			}
+		}
+	}
+}
+
+func TestCatalogPickerMetadataIsExplicitAndSupported(t *testing.T) {
+	validTypes := map[commands.ResourceType]bool{
+		commands.ResourceTypeContainer: true,
+		commands.ResourceTypeImage:     true,
+		commands.ResourceTypeNetwork:   true,
+		commands.ResourceTypeVolume:    true,
+		commands.ResourceTypeSession:   true,
+	}
+	for _, command := range GetAllCommands() {
+		for _, argument := range command.Schema.Arguments {
+			if argument.PickerEnabled && (!validTypes[argument.ResourceType] || !argument.PickerAvailable()) {
+				t.Errorf("%s argument %q has invalid picker metadata: %#v", command.Full, argument.Name, argument)
+			}
+		}
+	}
+}
+
+func TestCatalogPickerMetadataRepresentativeFields(t *testing.T) {
+	tests := []struct {
+		category   string
+		command    string
+		argument   string
+		resource   commands.ResourceType
+		repeatable bool
+		picker     bool
+	}{
+		{"Container", "exec", "container", commands.ResourceTypeContainer, false, true},
+		{"Container", "start", "containers", commands.ResourceTypeContainer, true, true},
+		{"Image", "inspect", "images", commands.ResourceTypeImage, true, true},
+		{"Network", "connect", "network", commands.ResourceTypeNetwork, false, true},
+		{"Volume", "inspect", "volumes", commands.ResourceTypeVolume, true, true},
+		{"Session", "enter", "session", commands.ResourceTypeSession, false, true},
+		{"Image", "pull", "image", "", false, false},
+		{"Image", "build", "path", "", false, false},
+		{"Session", "run", "command", "", true, false},
+		{"Registry", "login", "server", "", false, false},
+	}
+	for _, test := range tests {
+		command := catalogCommand(t, test.category, test.command)
+		var found *commands.Argument
+		for index := range command.Schema.Arguments {
+			if command.Schema.Arguments[index].Name == test.argument {
+				found = &command.Schema.Arguments[index]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("%s/%s argument %q not found", test.category, test.command, test.argument)
+		}
+		if found.ResourceType != test.resource || found.Repeatable != test.repeatable || found.PickerEnabled != test.picker {
+			t.Errorf("%s/%s argument %q = %#v", test.category, test.command, test.argument, *found)
 		}
 	}
 }

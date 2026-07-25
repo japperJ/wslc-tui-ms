@@ -38,3 +38,7 @@ Thumbs.db
 
 #specfile
 wslc-tui-ms.exe~
+
+#graphify
+
+/graphify-out/

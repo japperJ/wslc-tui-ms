@@ -3,6 +3,17 @@ package commands
 // OptionKind identifies the control used to edit an option value.
 type OptionKind string
 
+// ResourceType identifies a discoverable WSLC resource.
+type ResourceType string
+
+const (
+	ResourceTypeContainer ResourceType = "container"
+	ResourceTypeImage     ResourceType = "image"
+	ResourceTypeNetwork   ResourceType = "network"
+	ResourceTypeVolume    ResourceType = "volume"
+	ResourceTypeSession   ResourceType = "session"
+)
+
 const (
 	// OptionKindBoolean identifies a boolean option.
 	OptionKindBoolean OptionKind = "boolean"
@@ -25,12 +36,24 @@ type Validation struct {
 
 // Argument describes an ordered positional command argument.
 type Argument struct {
-	Name        string
-	Label       string
-	Required    bool
-	Repeatable  bool
-	Placeholder string
-	Validation  Validation
+	Name          string
+	Label         string
+	Required      bool
+	Repeatable    bool
+	ResourceType  ResourceType
+	PickerEnabled bool
+	Placeholder   string
+	Validation    Validation
+}
+
+// PickerAvailable reports whether this argument has a supported resource binding.
+func (a Argument) PickerAvailable() bool {
+	switch a.ResourceType {
+	case ResourceTypeContainer, ResourceTypeImage, ResourceTypeNetwork, ResourceTypeVolume, ResourceTypeSession:
+		return a.PickerEnabled
+	default:
+		return false
+	}
 }
 
 // Option describes an ordered command option.
