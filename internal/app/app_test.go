@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -160,6 +161,17 @@ func TestHelpIncludesUpdateShortcut(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	if !strings.Contains(m.getHelpTooltip(), "u         Check for updates") {
 		t.Fatalf("help omitted update shortcut:\n%s", m.getHelpTooltip())
+	}
+}
+
+func TestCategorySidebarUsesKeyboardShortcutNumbers(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	sidebar := stripAnsi(m.renderSidebar(32))
+	for i, category := range m.categories {
+		want := fmt.Sprintf("%d  %s", i+1, category)
+		if !strings.Contains(sidebar, want) {
+			t.Fatalf("sidebar omitted shortcut %q:\n%s", want, sidebar)
+		}
 	}
 }
 

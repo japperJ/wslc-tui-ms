@@ -1747,21 +1747,21 @@ func (m model) renderSidebar(width int) string {
 	lines = append(lines, ui.SidebarTitleStyle.Render(" CATEGORIES"))
 	lines = append(lines, "")
 
-	maxCatWidth := width - 6 // -2 borders, -2 padding, -2 for icon
+	maxCatWidth := width - 6 // -2 borders, -2 padding, -2 for shortcut
 
 	for i, cat := range m.categories {
-		icon := ui.GetCategoryIcon(cat)
+		shortcut := fmt.Sprintf("%d", i+1)
 		count := len(m.allCommands[cat])
 		countStr := fmt.Sprintf("%d", count)
 
 		if i == m.sidebarIndex {
-			item := fmt.Sprintf("%s  %s", icon, cat)
+			item := fmt.Sprintf("%s  %s", shortcut, cat)
 			item = truncateString(item, maxCatWidth)
 			item = padRight(item, maxCatWidth) // ensure full-width bg
 			countPart := fmt.Sprintf(" %s", ui.SidebarItemCountStyle.Render(countStr))
 			lines = append(lines, ui.SidebarItemActiveBgStyle.Render(item)+countPart)
 		} else {
-			item := fmt.Sprintf(" %s  %s", icon, cat)
+			item := fmt.Sprintf(" %s  %s", shortcut, cat)
 			item = truncateString(item, maxCatWidth)
 			countPart := fmt.Sprintf(" %s", ui.SidebarItemCountStyle.Render(countStr))
 			lines = append(lines, ui.SidebarItemStyle.Render(item)+countPart)
