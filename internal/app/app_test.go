@@ -156,6 +156,13 @@ func TestFocusedCommandFooterShowsUpdateShortcut(t *testing.T) {
 	}
 }
 
+func TestHelpIncludesUpdateShortcut(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	if !strings.Contains(m.getHelpTooltip(), "u         Check for updates") {
+		t.Fatalf("help omitted update shortcut:\n%s", m.getHelpTooltip())
+	}
+}
+
 func TestHeaderShowsBuildVersion(t *testing.T) {
 	old := buildinfo.Version
 	buildinfo.Version = "v9.9.9-test"

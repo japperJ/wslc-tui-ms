@@ -2585,6 +2585,7 @@ Commands:
   1-7       Jump to category
   /         Focus search
   l         Switch to Learn tab
+  u         Check for updates
   ?         Toggle this help
   q         Quit
 
