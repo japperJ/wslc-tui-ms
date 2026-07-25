@@ -2,6 +2,7 @@ package app
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,29 @@ func TestCanceledExecutionIgnoresLateCompletion(t *testing.T) {
 	got := updated.(model)
 	if got.outputResult != nil {
 		t.Fatalf("late completion populated output: %#v", got.outputResult)
+	}
+}
+
+func TestExecutionStreamChunkAppearsBeforeCompletion(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.currentView = viewOutput
+	m.running = true
+	m.executionID = 3
+
+	updated, _ := m.Update(execStreamMsg{id: 3, chunk: "first log line\n"})
+	got := updated.(model)
+
+	if got.executionOutput != "first log line\n" {
+		t.Fatalf("streamed output = %q, want %q", got.executionOutput, "first log line\n")
+	}
+	if !strings.Contains(stripAnsi(got.renderRunningView()), "first log line") {
+		t.Fatalf("running view omitted streamed output:\n%s", got.renderRunningView())
+	}
+
+	updated, _ = got.Update(execStreamMsg{id: 3, done: true, result: commands.ExecutionResult{ExitCode: 0}})
+	got = updated.(model)
+	if got.running || got.outputResult == nil || got.outputResult.Output != "first log line\n" {
+		t.Fatalf("stream completion did not preserve output: running=%v result=%#v", got.running, got.outputResult)
 	}
 }
 

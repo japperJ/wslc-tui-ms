@@ -196,6 +196,8 @@ type model struct {
 	outputArgs        []string
 	pendingCommand    string
 	pendingDifficulty string
+	executionOutput   string
+	executionEvents   <-chan execStreamEvent
 
 	// Output
 	outputResult    *commands.ExecutionResult
@@ -252,6 +254,45 @@ type clickRegion struct {
 type execDoneMsg struct {
 	result commands.ExecutionResult
 	id     int
+}
+
+type execPollMsg struct {
+	id     int
+	events <-chan execStreamEvent
+}
+
+type execStreamMsg struct {
+	id     int
+	chunk  string
+	done   bool
+	result commands.ExecutionResult
+}
+
+type execStreamEvent struct {
+	chunk  string
+	done   bool
+	result commands.ExecutionResult
+}
+
+type execStreamWriter struct {
+	ctx    context.Context
+	events chan<- execStreamEvent
+}
+
+func (w execStreamWriter) Write(p []byte) (int, error) {
+	select {
+	case w.events <- execStreamEvent{chunk: string(p)}:
+		return len(p), nil
+	case <-w.ctx.Done():
+		return 0, w.ctx.Err()
+	}
+}
+
+func pollExecution(id int, events <-chan execStreamEvent) tea.Cmd {
+	return func() tea.Msg {
+		event := <-events
+		return execStreamMsg{id: id, chunk: event.chunk, done: event.done, result: event.result}
+	}
 }
 
 type splashTickMsg struct{}
@@ -407,6 +448,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setViewportOutput()
 		m.viewport.GotoTop()
 		return m, nil
+	case execPollMsg:
+		if msg.id != m.executionID {
+			return m, nil
+		}
+		return m, pollExecution(msg.id, msg.events)
+	case execStreamMsg:
+		if msg.id != m.executionID {
+			return m, nil
+		}
+		m.executionOutput += msg.chunk
+		if !msg.done {
+			return m, pollExecution(msg.id, m.executionEvents)
+		}
+		m.running = false
+		msg.result.Output = m.executionOutput
+		m.outputResult = &msg.result
+		m.setViewportOutput()
+		m.viewport.GotoTop()
+		return m, nil
 	case updateResultMsg:
 		m.updateChecking = false
 		m.updateError = msg.err
@@ -543,12 +603,15 @@ func (m model) executeCommand(command string) (tea.Model, tea.Cmd) {
 
 func (m model) executeCommandWithArgs(command string, structuredArgs []string) (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
+	stream := make(chan execStreamEvent, 32)
 	m.cancelFn = cancel
 	m.running = true
 	m.executionID++
 	m.outputCmd = command
 	m.outputArgs = append([]string(nil), structuredArgs...)
 	m.outputResult = nil
+	m.executionOutput = ""
+	m.executionEvents = stream
 	m.lastCopied = ""
 	m.currentView = viewOutput
 
@@ -567,19 +630,20 @@ func (m model) executeCommandWithArgs(command string, structuredArgs []string) (
 			execCmd = exec.CommandContext(ctx, "cmd", "/C", command)
 		}
 
-		var stdout, stderr bytes.Buffer
-		execCmd.Stdout = &stdout
-		execCmd.Stderr = &stderr
+		writer := execStreamWriter{ctx: ctx, events: stream}
+		execCmd.Stdout = writer
+		execCmd.Stderr = writer
 
 		if err := execCmd.Start(); err != nil {
-			return execDoneMsg{
-				id: execID,
+			stream <- execStreamEvent{
+				done: true,
 				result: commands.ExecutionResult{
 					Error:    err,
 					ExitCode: -1,
 					Duration: time.Since(start),
 				},
 			}
+			return execPollMsg{id: execID, events: stream}
 		}
 
 		go func() {
@@ -594,33 +658,28 @@ func (m model) executeCommandWithArgs(command string, structuredArgs []string) (
 			}
 		}()
 
-		err := execCmd.Wait()
-		duration := time.Since(start)
+		go func() {
+			err := execCmd.Wait()
+			duration := time.Since(start)
 
-		output := stdout.String()
-		if stderr.Len() > 0 {
-			if output != "" {
-				output += "\n"
+			exitCode := 0
+			if err != nil {
+				if exitErr, ok := err.(*exec.ExitError); ok {
+					exitCode = exitErr.ExitCode()
+				}
 			}
-			output += stderr.String()
-		}
 
-		exitCode := 0
-		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				exitCode = exitErr.ExitCode()
+			stream <- execStreamEvent{
+				done: true,
+				result: commands.ExecutionResult{
+					Error:    err,
+					ExitCode: exitCode,
+					Duration: duration,
+				},
 			}
-		}
+		}()
 
-		return execDoneMsg{
-			id: execID,
-			result: commands.ExecutionResult{
-				Output:   output,
-				Error:    err,
-				ExitCode: exitCode,
-				Duration: duration,
-			},
-		}
+		return execPollMsg{id: execID, events: stream}
 	}
 
 	return m, tea.Batch(tea.Sequence(tea.Println(""), cmd))
@@ -2462,6 +2521,9 @@ func (m model) renderRunningView() string {
 	lines = append(lines, "")
 	lines = append(lines, "  "+ui.OutputJsonStringStyle.Render("⟳  Executing command..."))
 	lines = append(lines, "  "+ui.CmdDescStyle.Render(m.outputCmd))
+	if output := strings.TrimSpace(m.executionOutput); output != "" {
+		lines = append(lines, "", ui.SectionLabelStyle.Render("  LIVE OUTPUT"), output)
+	}
 	lines = append(lines, "")
 	lines = append(lines, "  "+ui.ActionHintKeyStyle.Render("Esc")+ui.ActionHintStyle.Render(" Cancel"))
 
