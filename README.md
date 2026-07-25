@@ -209,4 +209,4 @@ When adding a catalog command, update its metadata and schema together, include 
 
 ## License
 
-No license file is currently included in this repository. Add or confirm the project license before distributing the software.
+WSLC TUI is released under the [MIT License](LICENSE).
