@@ -127,3 +127,19 @@ func TestServicePreservesAssetMetadata(t *testing.T) {
 		t.Fatalf("metadata lost: %+v", d)
 	}
 }
+
+func TestIsDevelopmentBuild(t *testing.T) {
+	for _, version := range []string{"dev", "unknown"} {
+		if !(Service{CurrentVersion: version}).IsDevelopmentBuild() {
+			t.Fatalf("version %q should be treated as a development build", version)
+		}
+	}
+	for _, version := range []string{"v1.0.0", "v0.1.46-beta.1", "1.2.3"} {
+		if (Service{CurrentVersion: version}).IsDevelopmentBuild() {
+			t.Fatalf("version %q is a tagged release, not a development build", version)
+		}
+	}
+	if (Service{}).IsDevelopmentBuild() {
+		t.Fatal("an unset version is unknown, not a development build")
+	}
+}

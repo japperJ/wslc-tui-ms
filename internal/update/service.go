@@ -9,6 +9,22 @@ import (
 
 const Cooldown = 24 * time.Hour
 
+// IsDevelopmentBuild reports whether the running binary was produced by a local
+// build rather than a tagged release. Development builds carry the Version
+// "dev", which is not valid SemVer, so parseVersion rejects it and no release
+// can ever be newer than it. An update check against such a build can only
+// ever report "no update found", which reads as a false negative.
+//
+// An empty Version is not treated as a development build: a real binary always
+// has either "dev" or a tag, so empty means unset rather than dev.
+func (s Service) IsDevelopmentBuild() bool {
+	if s.CurrentVersion == "" {
+		return false
+	}
+	_, err := parseVersion(s.CurrentVersion)
+	return err != nil
+}
+
 type Service struct {
 	Client                       ReleaseClient
 	Store                        settings.Store
