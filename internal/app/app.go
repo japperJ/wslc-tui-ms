@@ -389,14 +389,26 @@ func NewModel() model {
 	return m
 }
 
+// initialUpdateChannel picks the update channel to use before the user has
+// chosen one explicitly.
+//
+// A persisted choice always wins. Otherwise the build's own channel decides:
+// "beta" and "development" both map to Beta, because a development build tracks
+// the newest work and every release we publish is currently a prerelease.
+// Falling through to Stable for "development" would strand local builds on the
+// one channel that can never match, because selectRelease skips prereleases.
 func initialUpdateChannel(buildChannel string, state settings.Settings) update.Channel {
 	if state.ChannelSet {
 		return update.Channel(state.Channel)
 	}
-	if strings.EqualFold(strings.TrimSpace(buildChannel), "beta") {
+	switch strings.ToLower(strings.TrimSpace(buildChannel)) {
+	case "beta", "development", "dev":
+		return update.Beta
+	case "stable":
+		return update.Stable
+	default:
 		return update.Beta
 	}
-	return update.Stable
 }
 
 func (m model) Init() tea.Cmd {
@@ -472,6 +484,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateError = msg.err
 		if msg.manual && msg.err == nil && !msg.decision.Available && !msg.decision.Mandatory {
 			m.updateStatus = "No newer update found."
+			// "dev" is not SemVer, so every release compares as older and the
+			// result above is a false negative rather than a genuine up-to-date.
+			if m.updateService.IsDevelopmentBuild() {
+				m.updateStatus = "Development build (" + buildinfo.Version + ") has no version to compare against releases."
+			}
 		}
 		if msg.err == nil && (msg.decision.Available || msg.decision.Mandatory) {
 			m.updateDecision = &msg.decision

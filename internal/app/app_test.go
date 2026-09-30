@@ -109,6 +109,9 @@ func TestAutomaticUpdateFailureIsNonBlocking(t *testing.T) {
 
 func TestManualUpdateCheckLeavesReadableCompletionStatus(t *testing.T) {
 	m := NewModelForTest(120, 30)
+	// NewModel carries the "dev" version, which cannot be compared against
+	// releases; use a tagged version so this covers the genuine up-to-date path.
+	m.updateService.CurrentVersion = "v1.0.0"
 	m.updateChecking = true
 	updated, cmd := m.Update(updateResultMsg{manual: true})
 	m = updated.(model)
@@ -269,5 +272,55 @@ func TestInitialUpdateChannelUsesBetaBuildWhenUnconfigured(t *testing.T) {
 func TestInitialUpdateChannelPreservesPersistedChoice(t *testing.T) {
 	if got := initialUpdateChannel("Beta", settings.Settings{Channel: settings.Stable, ChannelSet: true}); got != update.Stable {
 		t.Fatalf("persisted channel = %q, want %q", got, update.Stable)
+	}
+}
+
+// Every release this repo publishes is a prerelease, so a build that falls
+// through to Stable can never be offered one. A plain `go build` reports
+// channel "development" and must therefore land on Beta.
+func TestInitialUpdateChannelDefaultsDevelopmentBuildToBeta(t *testing.T) {
+	for _, channel := range []string{"development", "Development", " dev ", "Beta", "unknown-future-channel"} {
+		if got := initialUpdateChannel(channel, settings.Settings{}); got != update.Beta {
+			t.Fatalf("initialUpdateChannel(%q) = %q, want %q", channel, got, update.Beta)
+		}
+	}
+}
+
+func TestInitialUpdateChannelHonoursStableBuild(t *testing.T) {
+	if got := initialUpdateChannel("stable", settings.Settings{}); got != update.Stable {
+		t.Fatalf("initialUpdateChannel(stable) = %q, want %q", got, update.Stable)
+	}
+}
+
+// A "No newer update found." result from a dev build is a false negative:
+// "dev" is not SemVer, so nothing ever compares as newer.
+func TestUpdateStatusExplainsDevelopmentBuildCannotCompare(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json")), CurrentVersion: "dev"}
+	m.updateChecking = true
+
+	updated, _ := m.Update(updateResultMsg{decision: update.Decision{}, manual: true})
+	m = updated.(model)
+
+	if m.updateChecking {
+		t.Fatal("update check should have finished")
+	}
+	if m.updateStatus == "No newer update found." {
+		t.Fatalf("dev build reported a false negative: %q", m.updateStatus)
+	}
+	if !strings.Contains(m.updateStatus, "Development build") {
+		t.Fatalf("status = %q, want it to explain the development build", m.updateStatus)
+	}
+}
+
+func TestUpdateStatusReportsUpToDateForReleaseBuild(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.updateService = update.Service{Store: settings.NewStore(filepath.Join(t.TempDir(), "settings.json")), CurrentVersion: "v1.0.0"}
+
+	updated, _ := m.Update(updateResultMsg{decision: update.Decision{}, manual: true})
+	m = updated.(model)
+
+	if m.updateStatus != "No newer update found." {
+		t.Fatalf("status = %q, want %q", m.updateStatus, "No newer update found.")
 	}
 }
