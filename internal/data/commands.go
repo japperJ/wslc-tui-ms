@@ -21,7 +21,7 @@ var AllCommands = map[string][]commands.Command{
 			},
 			Flags: []commands.Flag{
 				{Short: "-a", Long: "--all", Description: "Show all containers (default shows just running)"},
-				{Short: "", Long: "--format", Description: "Format the output using a Go template, e.g. '{{json .}}' or 'wide'", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
 				{Short: "", Long: "--filter", Description: "Filter output based on conditions"},
 				{Short: "", Long: "--no-trunc", Description: "Don't truncate output"},
 			},
@@ -180,6 +180,24 @@ var AllCommands = map[string][]commands.Command{
 			Tags:       []string{"kill", "stop", "force", "signal"},
 		},
 		{
+			Name:        "restart",
+			Full:        "wslc restart {name}",
+			Category:    "Container",
+			Description: "Restart one or more containers (containers that are not running are started)",
+			Usage:       "wslc restart [flags] CONTAINER [CONTAINER...]",
+			Examples: []string{
+				"wslc restart mycontainer",
+				"wslc restart -t 30 mycontainer",
+				"wslc restart -s SIGINT mycontainer",
+			},
+			Flags: []commands.Flag{
+				{Short: "-s", Long: "--signal", Description: "Signal to send (default: the container's configured STOPSIGNAL, or SIGTERM if none is configured)"},
+				{Short: "-t", Long: "--timeout", Description: "Seconds to wait before killing the container (default: the container's configured stop timeout)"},
+			},
+			Difficulty: "intermediate",
+			Tags:       []string{"restart", "reboot", "bounce", "stop", "start"},
+		},
+		{
 			Name:        "rm",
 			Full:        "wslc remove {name}",
 			Category:    "Container",
@@ -203,10 +221,12 @@ var AllCommands = map[string][]commands.Command{
 			Usage:       "wslc inspect [flags] CONTAINER [CONTAINER...]",
 			Examples: []string{
 				"wslc inspect mycontainer",
-				"wslc inspect --format '{{.State.Status}}' mycontainer",
+				"wslc inspect --format json mycontainer",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Format the output using a Go template"},
+				{Short: "-t", Long: "--type", Description: "Type of the object to inspect"},
+				{Short: "-s", Long: "--size", Description: "Display total file sizes if the type is container"},
+				{Short: "-f", Long: "--format", Description: "Output formatting (json for single-line output)"},
 			},
 			Difficulty: "beginner",
 			Tags:       []string{"inspect", "info", "details", "json"},
@@ -310,7 +330,7 @@ var AllCommands = map[string][]commands.Command{
 			},
 			Flags: []commands.Flag{
 				{Short: "-a", Long: "--all", Description: "Show all images (not just dangling)"},
-				{Short: "", Long: "--format", Description: "Format the output using a Go template, e.g. '{{json .}}' or 'wide'", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
 				{Short: "", Long: "--filter", Description: "Filter output based on conditions"},
 				{Short: "", Long: "--no-trunc", Description: "Don't truncate output"},
 			},
@@ -385,10 +405,12 @@ var AllCommands = map[string][]commands.Command{
 			Usage:       "wslc inspect [flags] IMAGE [IMAGE...]",
 			Examples: []string{
 				"wslc inspect ubuntu:latest",
-				"wslc inspect --format '{{.Os}}/{{.Architecture}}' ubuntu:latest",
+				"wslc inspect --format json ubuntu:latest",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Format the output using a Go template"},
+				{Short: "-t", Long: "--type", Description: "Type of the object to inspect"},
+				{Short: "-s", Long: "--size", Description: "Display total file sizes if the type is container"},
+				{Short: "-f", Long: "--format", Description: "Output formatting (json for single-line output)"},
 			},
 			Difficulty: "beginner",
 			Tags:       []string{"inspect", "info", "details", "json"},
@@ -488,7 +510,7 @@ var AllCommands = map[string][]commands.Command{
 				"wslc network ls --format json",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Format the output using a Go template, e.g. '{{json .}}' or 'wide'", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
 				{Short: "", Long: "--filter", Description: "Provide filter values"},
 			},
 			Difficulty: "beginner",
@@ -537,7 +559,7 @@ var AllCommands = map[string][]commands.Command{
 				"wslc network inspect my-network",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Format the output using a Go template"},
+				{Short: "-f", Long: "--format", Description: "Output formatting (json for single-line output; default is indented JSON)"},
 			},
 			Difficulty: "beginner",
 			Tags:       []string{"inspect", "info", "details"},
@@ -605,7 +627,7 @@ var AllCommands = map[string][]commands.Command{
 				"wslc volume ls --format json",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Format the output using a Go template, e.g. '{{json .}}' or 'wide'", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
 				{Short: "", Long: "--filter", Description: "Provide filter values"},
 			},
 			Difficulty: "beginner",
@@ -652,7 +674,7 @@ var AllCommands = map[string][]commands.Command{
 				"wslc volume inspect myvolume",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Format the output using a Go template"},
+				{Short: "-f", Long: "--format", Description: "Output formatting (json for single-line output; default is indented JSON)"},
 			},
 			Difficulty: "beginner",
 			Tags:       []string{"inspect", "info", "details"},
@@ -766,6 +788,67 @@ var AllCommands = map[string][]commands.Command{
 			Difficulty: "beginner",
 			Tags:       []string{"version", "info", "debug", "compatibility"},
 		},
+		{
+			Name:        "info",
+			Full:        "wslc info --format table",
+			Category:    "System",
+			Description: "Display system-wide information (client version, session manager version, and active sessions)",
+			Usage:       "wslc info [flags]",
+			Examples: []string{
+				"wslc info",
+				"wslc info --format json",
+			},
+			Flags: []commands.Flag{
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
+			},
+			Difficulty: "beginner",
+			Tags:       []string{"info", "system", "status", "version", "sessions"},
+		},
+		{
+			Name:        "events",
+			Full:        "wslc system events",
+			Category:    "System",
+			Description: "Monitor real-time events from containers",
+			Usage:       "wslc system events [flags]",
+			Examples: []string{
+				"wslc system events",
+				"wslc system events --since 10m",
+				"wslc system events --filter type=container",
+			},
+			Flags: []commands.Flag{
+				{Short: "", Long: "--since", Description: "Show all events created since the timestamp"},
+				{Short: "", Long: "--until", Description: "Stream events until the timestamp"},
+				{Short: "-f", Long: "--filter", Description: "Filter output based on conditions provided"},
+			},
+			Difficulty: "advanced",
+			Tags:       []string{"events", "stream", "monitor", "watch", "logs"},
+		},
+		{
+			Name:        "settings",
+			Full:        "wslc settings",
+			Category:    "System",
+			Description: "Open the wslc settings file in your default editor (created with all settings commented out if missing)",
+			Usage:       "wslc settings",
+			Examples: []string{
+				"wslc settings",
+			},
+			Flags:      []commands.Flag{},
+			Difficulty: "advanced",
+			Tags:       []string{"settings", "config", "configuration", "edit", "yaml"},
+		},
+		{
+			Name:        "reset",
+			Full:        "wslc settings reset",
+			Category:    "System",
+			Description: "Reset the wslc settings file to the built-in defaults template (overwrites the current file)",
+			Usage:       "wslc settings reset",
+			Examples: []string{
+				"wslc settings reset",
+			},
+			Flags:      []commands.Flag{},
+			Difficulty: "advanced",
+			Tags:       []string{"settings", "reset", "config", "defaults", "restore"},
+		},
 	},
 	"Registry": {
 		{
@@ -841,6 +924,11 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 	s := func(flag string, choices ...string) commands.Option {
 		return commands.Option{Flag: flag, Kind: commands.OptionKindSelect, Default: "table", Choices: choices}
 	}
+	// so is a select with no implicit default, for flags that are omitted unless
+	// the user picks a value.
+	so := func(flag string, choices ...string) commands.Option {
+		return commands.Option{Flag: flag, Kind: commands.OptionKindSelect, Choices: choices}
+	}
 	n := func(flag, defaultValue string) commands.Option {
 		return commands.Option{Flag: flag, Kind: commands.OptionKindNumeric, Default: defaultValue}
 	}
@@ -852,7 +940,7 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 	}
 
 	schemas := map[string]*commands.CommandSchema{
-		"Container/ls":      {Options: []commands.Option{b("--all"), td("--format", "table"), t("--filter"), b("--no-trunc")}},
+		"Container/ls":      {Options: []commands.Option{b("--all"), s("--format", "json", "table"), t("--filter"), b("--no-trunc")}},
 		"Container/run":     {Arguments: []commands.Argument{a("image", true, false), a("command", false, true)}, Options: []commands.Option{b("--detach"), b("--interactive"), b("--tty"), t("--name"), t("--publish"), t("--volume"), t("--env"), b("--rm"), t("--network"), t("--workdir"), t("--cpus"), t("--memory"), t("--ulimit"), t("--shm-size"), t("--stop-signal"), t("--gpus")}},
 		"Container/create":  {Arguments: []commands.Argument{a("image", true, false), a("command", false, true)}, Options: []commands.Option{t("--name"), t("--publish"), t("--volume"), t("--env"), t("--network"), t("--workdir"), t("--cpus"), t("--memory"), t("--gpus")}},
 		"Container/exec":    {Arguments: []commands.Argument{r("container", true, false, commands.ResourceTypeContainer), a("command", true, true)}, Options: []commands.Option{b("--detach"), t("--env"), b("--interactive"), b("--privileged"), b("--tty"), t("--user"), t("--workdir")}},
@@ -860,38 +948,39 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 		"Container/start":   {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{b("--attach"), b("--interactive")}},
 		"Container/stop":    {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{n("--time", "10")}},
 		"Container/kill":    {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{td("--signal", "KILL")}},
+		"Container/restart": {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--signal"), n("--timeout", "")}},
 		"Container/rm":      {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{b("--force")}},
-		"Container/inspect": {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--format")}},
+		"Container/inspect": {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--type"), b("--size"), so("--format", "json")}},
 		"Container/stats":   {Arguments: []commands.Argument{r("containers", false, true, commands.ResourceTypeContainer)}, Options: []commands.Option{s("--format", "table", "json"), b("--all"), b("--no-trunc")}},
 		"Container/attach":  {Arguments: []commands.Argument{r("container", true, false, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--detach-keys"), b("--no-stdin")}},
 		"Container/export":  {Arguments: []commands.Argument{r("container", true, false, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--output")}},
 		"Container/cp":      {Arguments: []commands.Argument{a("source", true, false), a("target", true, false)}, Options: []commands.Option{b("--archive")}},
 		"Container/prune":   {Options: []commands.Option{b("--force")}},
 
-		"Image/ls":      {Options: []commands.Option{b("--all"), td("--format", "table"), t("--filter"), b("--no-trunc")}},
+		"Image/ls":      {Options: []commands.Option{b("--all"), s("--format", "json", "table"), t("--filter"), b("--no-trunc")}},
 		"Image/pull":    {Arguments: []commands.Argument{a("image", true, false)}, Options: []commands.Option{t("--platform")}},
 		"Image/push":    {Arguments: []commands.Argument{a("image", true, false)}},
 		"Image/tag":     {Arguments: []commands.Argument{a("source", true, false), a("target", true, false)}},
 		"Image/rm":      {Arguments: []commands.Argument{r("images", true, true, commands.ResourceTypeImage)}, Options: []commands.Option{b("--force")}},
-		"Image/inspect": {Arguments: []commands.Argument{r("images", true, true, commands.ResourceTypeImage)}, Options: []commands.Option{t("--format")}},
+		"Image/inspect": {Arguments: []commands.Argument{r("images", true, true, commands.ResourceTypeImage)}, Options: []commands.Option{t("--type"), b("--size"), so("--format", "json")}},
 		"Image/prune":   {Options: []commands.Option{b("--force")}},
 		"Image/save":    {Arguments: []commands.Argument{r("images", true, true, commands.ResourceTypeImage)}, Options: []commands.Option{t("--output")}},
 		"Image/load":    {Options: []commands.Option{t("--input")}},
 		"Image/build":   {Arguments: []commands.Argument{a("path", true, false)}, Options: []commands.Option{t("--tag"), t("--file"), b("--no-cache"), b("--pull"), t("--label")}},
 		"Image/import":  {Arguments: []commands.Argument{a("file", true, false), a("image", false, false)}, Options: []commands.Option{t("--message"), t("--platform")}},
 
-		"Network/ls":         {Options: []commands.Option{td("--format", "table"), t("--filter")}},
+		"Network/ls":         {Options: []commands.Option{s("--format", "json", "table"), t("--filter")}},
 		"Network/create":     {Arguments: []commands.Argument{a("network", true, false)}, Options: []commands.Option{td("--driver", "bridge"), t("--subnet"), t("--gateway"), b("--internal")}},
 		"Network/rm":         {Arguments: []commands.Argument{r("networks", true, true, commands.ResourceTypeNetwork)}},
-		"Network/inspect":    {Arguments: []commands.Argument{r("networks", true, true, commands.ResourceTypeNetwork)}, Options: []commands.Option{t("--format")}},
+		"Network/inspect":    {Arguments: []commands.Argument{r("networks", true, true, commands.ResourceTypeNetwork)}, Options: []commands.Option{t("--type"), b("--size"), so("--format", "json")}},
 		"Network/connect":    {Arguments: []commands.Argument{r("network", true, false, commands.ResourceTypeNetwork), r("container", true, false, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--alias"), t("--ip"), t("--link")}},
 		"Network/disconnect": {Arguments: []commands.Argument{r("network", true, false, commands.ResourceTypeNetwork), r("container", true, false, commands.ResourceTypeContainer)}, Options: []commands.Option{b("--force")}},
 		"Network/prune":      {Options: []commands.Option{b("--force")}},
 
-		"Volume/ls":      {Options: []commands.Option{td("--format", "table"), t("--filter")}},
+		"Volume/ls":      {Options: []commands.Option{s("--format", "json", "table"), t("--filter")}},
 		"Volume/create":  {Arguments: []commands.Argument{a("volume", false, false)}, Options: []commands.Option{t("--label"), t("--driver")}},
 		"Volume/rm":      {Arguments: []commands.Argument{r("volumes", true, true, commands.ResourceTypeVolume)}, Options: []commands.Option{b("--force")}},
-		"Volume/inspect": {Arguments: []commands.Argument{r("volumes", true, true, commands.ResourceTypeVolume)}, Options: []commands.Option{t("--format")}},
+		"Volume/inspect": {Arguments: []commands.Argument{r("volumes", true, true, commands.ResourceTypeVolume)}, Options: []commands.Option{t("--type"), b("--size"), so("--format", "json")}},
 		"Volume/prune":   {Options: []commands.Option{b("--force")}},
 
 		"Session/list":      {Options: []commands.Option{b("--verbose")}},
@@ -901,6 +990,10 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 		"Session/terminate": {Arguments: []commands.Argument{r("session", true, false, commands.ResourceTypeSession)}},
 
 		"System/version":  {},
+		"System/info":     {Options: []commands.Option{s("--format", "json", "table")}},
+		"System/events":   {Options: []commands.Option{t("--since"), t("--until"), t("--filter")}},
+		"System/settings": {},
+		"System/reset":    {},
 		"Registry/login":  {Arguments: []commands.Argument{a("server", false, false)}, Options: []commands.Option{t("--username"), t("--password"), b("--password-stdin")}},
 		"Registry/logout": {Arguments: []commands.Argument{a("server", false, false)}},
 	}

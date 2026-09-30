@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -35,7 +36,9 @@ func TestGetAllCommandsNonEmpty(t *testing.T) {
 }
 
 func TestNoNerdctlSpecificCommands(t *testing.T) {
-	removedCommands := []string{"restart", "healthcheck", "diff", "commit", "rename", "update", "wait", "pause", "unpause", "port", "convert", "encrypt", "decrypt"}
+	// "restart" moved to "present in wslc 3.0.1" below; every other name here is
+	// still nerdctl-only and must stay out of the catalog.
+	removedCommands := []string{"healthcheck", "diff", "commit", "rename", "update", "wait", "pause", "unpause", "port", "convert", "encrypt", "decrypt"}
 	removedCategories := []string{"Builder", "Namespace", "Compose"}
 
 	all := GetAllCommands()
@@ -109,7 +112,7 @@ func TestSessionListUsesSupportedVerboseOption(t *testing.T) {
 
 func TestSystemCategoryContainsSupportedCommands(t *testing.T) {
 	commandsByCategory := GetCommandsByCategory("System")
-	want := map[string]bool{"version": false}
+	want := map[string]bool{"version": false, "info": false, "events": false, "settings": false, "reset": false}
 	for _, command := range commandsByCategory {
 		if _, ok := want[command.Name]; ok {
 			want[command.Name] = true
@@ -144,12 +147,12 @@ func TestGPUFlagOnRun(t *testing.T) {
 
 func TestInstalledWSLCCommandsAreCataloged(t *testing.T) {
 	expected := map[string][]string{
-		"Container": {"create", "start", "stop", "kill", "run", "exec", "attach", "ls", "inspect", "logs", "stats", "prune", "rm", "cp", "export"},
+		"Container": {"create", "start", "stop", "kill", "restart", "run", "exec", "attach", "ls", "inspect", "logs", "stats", "prune", "rm", "cp", "export"},
 		"Image":     {"build", "import", "load", "pull", "push", "ls", "inspect", "rm", "prune"},
 		"Network":   {"create", "rm", "prune", "ls", "inspect", "connect", "disconnect"},
 		"Volume":    {"create", "rm", "prune", "ls", "inspect"},
 		"Session":   {"list", "enter", "run", "shell", "terminate"},
-		"System":    {"version"},
+		"System":    {"version", "info", "events", "settings", "reset"},
 		"Registry":  {"login", "logout"},
 	}
 
@@ -168,10 +171,12 @@ func TestInstalledWSLCCommandsAreCataloged(t *testing.T) {
 }
 
 func TestUnsupportedWSLCCommandsAreNotCataloged(t *testing.T) {
+	// "System/info" and "System/events" became supported in wslc 3.0.1 and are
+	// now asserted in TestInstalledWSLCCommandsAreCataloged.
 	unsupported := map[string][]string{
 		"Image":    {"history"},
 		"Session":  {"start", "stop", "attach"},
-		"System":   {"info", "df", "prune", "events"},
+		"System":   {"df", "prune"},
 		"Registry": {"list"},
 	}
 
@@ -433,7 +438,40 @@ func TestCatalogRepresentativeCommandGeneration(t *testing.T) {
 	}
 }
 
-func TestListFormatAcceptsTemplatesAndWide(t *testing.T) {
+// wslc 3.0.1 accepts only json and table for list --format. Go templates and
+// "wide" are rejected by the CLI, so the TUI must reject them locally too.
+func TestListFormatAcceptsJSONAndTable(t *testing.T) {
+	for _, test := range []struct {
+		category string
+		format   string
+	}{
+		{category: "Container", format: "json"},
+		{category: "Container", format: "table"},
+		{category: "Image", format: "json"},
+		{category: "Image", format: "table"},
+		{category: "Network", format: "json"},
+		{category: "Network", format: "table"},
+		{category: "Volume", format: "json"},
+		{category: "Volume", format: "table"},
+	} {
+		command := catalogCommand(t, test.category, "ls")
+		result := commands.Build(
+			[]string{"wslc", strings.ToLower(test.category), "ls"},
+			*command.Schema,
+			nil,
+			map[string]string{"--format": test.format},
+		)
+		if len(result.Errors) != 0 {
+			t.Errorf("%s format %q returned errors: %v", test.category, test.format, result.Errors)
+		}
+		want := []string{"wslc", strings.ToLower(test.category), "ls", "--format", test.format}
+		if !reflect.DeepEqual(result.Args, want) {
+			t.Errorf("%s Args = %#v, want %#v", test.category, result.Args, want)
+		}
+	}
+}
+
+func TestListFormatRejectsTemplatesAndWide(t *testing.T) {
 	for _, test := range []struct {
 		category string
 		format   string
@@ -450,13 +488,119 @@ func TestListFormatAcceptsTemplatesAndWide(t *testing.T) {
 			nil,
 			map[string]string{"--format": test.format},
 		)
+		want := fmt.Sprintf(`option "--format" has invalid value %q`, test.format)
+		if !containsCommandError(result.Errors, want) {
+			t.Errorf("%s accepted unsupported format %q: %v", test.category, test.format, result.Errors)
+		}
+	}
+}
+
+// inspect only accepts json; its default is indented JSON, so the flag is
+// optional and must never be emitted with a value the CLI would reject.
+func TestInspectFormatAcceptsOnlyJSON(t *testing.T) {
+	for _, category := range []string{"Container", "Image", "Network", "Volume"} {
+		command := catalogCommand(t, category, "inspect")
+		option := findOption(t, command.Schema, "--format")
+		if option.Kind != commands.OptionKindSelect {
+			t.Fatalf("%s inspect --format kind = %v, want select", category, option.Kind)
+		}
+		if !reflect.DeepEqual(option.Choices, []string{"json"}) {
+			t.Errorf("%s inspect --format choices = %#v, want [json]", category, option.Choices)
+		}
+		if option.Default != "" {
+			t.Errorf("%s inspect --format default = %q, want empty so the flag is omitted", category, option.Default)
+		}
+
+		result := commands.Build(
+			[]string{"wslc", strings.ToLower(category), "inspect", "myobject"},
+			*command.Schema,
+			[][]string{{"myobject"}},
+			nil,
+		)
 		if len(result.Errors) != 0 {
-			t.Errorf("%s format %q returned errors: %v", test.category, test.format, result.Errors)
+			t.Errorf("%s inspect default build returned errors: %v", category, result.Errors)
 		}
-		want := []string{"wslc", strings.ToLower(test.category), "ls", "--format", test.format}
-		if !reflect.DeepEqual(result.Args, want) {
-			t.Errorf("%s Args = %#v, want %#v", test.category, result.Args, want)
+		if containsArg(result.Args, "--format") {
+			t.Errorf("%s inspect emitted --format by default: %#v", category, result.Args)
 		}
+
+		invalid := commands.Build(
+			[]string{"wslc", strings.ToLower(category), "inspect", "myobject"},
+			*command.Schema,
+			[][]string{{"myobject"}},
+			map[string]string{"--format": "{{.State.Status}}"},
+		)
+		if !containsCommandError(invalid.Errors, `option "--format" has invalid value "{{.State.Status}}"`) {
+			t.Errorf("%s inspect accepted a Go template: %v", category, invalid.Errors)
+		}
+	}
+}
+
+func findOption(t *testing.T, schema *commands.CommandSchema, flag string) commands.Option {
+	t.Helper()
+	if schema == nil {
+		t.Fatalf("command has no schema")
+	}
+	for _, option := range schema.Options {
+		if option.Flag == flag {
+			return option
+		}
+	}
+	t.Fatalf("schema has no %s option", flag)
+	return commands.Option{}
+}
+
+func containsArg(args []string, want string) bool {
+	for _, arg := range args {
+		if arg == want {
+			return true
+		}
+	}
+	return false
+}
+
+// wslc 3.0.1 added restart, plus the top-level info, events and settings
+// commands. These guard the schemas those entries rely on.
+func TestWslc301CommandsAreCataloged(t *testing.T) {
+	restart := catalogCommand(t, "Container", "restart")
+	if restart.Schema == nil || len(restart.Schema.Arguments) != 1 {
+		t.Fatalf("restart schema = %#v, want one container argument", restart.Schema)
+	}
+	argument := restart.Schema.Arguments[0]
+	if !argument.Required || !argument.Repeatable || argument.ResourceType != commands.ResourceTypeContainer {
+		t.Errorf("restart argument = %#v, want required repeatable container", argument)
+	}
+	if findOption(t, restart.Schema, "--signal").Kind != commands.OptionKindText {
+		t.Error("restart --signal should be free text so any signal name is accepted")
+	}
+	if findOption(t, restart.Schema, "--timeout").Kind != commands.OptionKindNumeric {
+		t.Error("restart --timeout should be numeric")
+	}
+	if findOption(t, restart.Schema, "--timeout").Default != "" {
+		t.Error("restart --timeout must default to empty so the CLI applies its own stop timeout")
+	}
+
+	info := catalogCommand(t, "System", "info")
+	infoFormat := findOption(t, info.Schema, "--format")
+	if infoFormat.Kind != commands.OptionKindSelect || !reflect.DeepEqual(infoFormat.Choices, []string{"json", "table"}) {
+		t.Errorf("info --format = %#v, want select of json/table", infoFormat)
+	}
+
+	events := catalogCommand(t, "System", "events")
+	for _, flag := range []string{"--since", "--until", "--filter"} {
+		if findOption(t, events.Schema, flag).Kind != commands.OptionKindText {
+			t.Errorf("events %s should be free text", flag)
+		}
+	}
+
+	for _, name := range []string{"settings", "reset"} {
+		command := catalogCommand(t, "System", name)
+		if command.Schema == nil || len(command.Schema.Options) != 0 || len(command.Schema.Arguments) != 0 {
+			t.Errorf("System/%s schema = %#v, want no options or arguments", name, command.Schema)
+		}
+	}
+	if reset := catalogCommand(t, "System", "reset"); reset.Full != "wslc settings reset" {
+		t.Errorf("System/reset Full = %q, want %q", reset.Full, "wslc settings reset")
 	}
 }
 
