@@ -252,10 +252,16 @@ func TestFocusedCommandSearchAcceptsChannelShortcutCharacters(t *testing.T) {
 
 func TestUpdateChannelAcceptsUppercaseC(t *testing.T) {
 	m := appWithDecision(t)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
 	m = updated.(model)
 	if m.updateChannel != update.Beta {
 		t.Fatalf("uppercase C channel = %q, want %q", m.updateChannel, update.Beta)
+	}
+	if cmd == nil {
+		t.Fatal("upper-case C should start a check for the selected channel")
+	}
+	if m.updateDecision != nil || m.updateConfirm || m.updateHandoff {
+		t.Fatalf("channel switch retained stale update state: decision=%v confirm=%v handoff=%v", m.updateDecision, m.updateConfirm, m.updateHandoff)
 	}
 }
 

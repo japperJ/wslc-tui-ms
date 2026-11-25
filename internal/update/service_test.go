@@ -72,6 +72,40 @@ func TestBetaBuildDiscoversPrereleaseV123FromFakeGitHubClient(t *testing.T) {
 		t.Fatalf("decision=%+v", d)
 	}
 }
+
+func TestMandatoryPolicyDoesNotOfferOlderOrCurrentRelease(t *testing.T) {
+	for _, tag := range []string{"v1.0.0", "v1.1.0"} {
+		t.Run(tag, func(t *testing.T) {
+			f := &fakeClient{
+				releases:  []Release{release(tag, false)},
+				policy:    Policy{MinimumSupportedVersion: "v1.2.0"},
+				checksums: checksum(tag),
+			}
+			d, err := testService(t, f).Check(context.Background(), Stable, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !d.Mandatory || d.Available {
+				t.Fatalf("decision=%+v, want mandatory state without selected release", d)
+			}
+		})
+	}
+}
+
+func TestPrereleaseNumericIdentifiersCompareNumerically(t *testing.T) {
+	a, err := parseVersion("v2.0.0-beta.10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := parseVersion("v2.0.0-beta.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compare(a, b) <= 0 {
+		t.Fatalf("beta.10 should sort after beta.2")
+	}
+}
+
 func TestServicePolicyAndDeferralPersist(t *testing.T) {
 	f := &fakeClient{releases: []Release{release("v1.1.0", false)}, policy: Policy{MinimumSupportedVersion: "v1.1.0"}, checksums: checksum("v1.1.0")}
 	s := testService(t, f)

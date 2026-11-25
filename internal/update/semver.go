@@ -53,7 +53,22 @@ func compare(a, b version) int {
 		return -1
 	}
 	for i := 0; i < len(a.pre) && i < len(b.pre); i++ {
-		if a.pre[i] != b.pre[i] {
+		aNum, aErr := strconv.Atoi(a.pre[i])
+		bNum, bErr := strconv.Atoi(b.pre[i])
+		switch {
+		case aErr == nil && bErr == nil:
+			if aNum == bNum {
+				continue
+			}
+			if aNum < bNum {
+				return -1
+			}
+			return 1
+		case aErr == nil && bErr != nil:
+			return -1
+		case aErr != nil && bErr == nil:
+			return 1
+		case a.pre[i] != b.pre[i]:
 			return strings.Compare(a.pre[i], b.pre[i])
 		}
 	}

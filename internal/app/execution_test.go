@@ -38,6 +38,27 @@ func TestCanceledExecutionIgnoresLateCompletion(t *testing.T) {
 	}
 }
 
+func TestCtrlCCancelsRunningExecution(t *testing.T) {
+	canceled := false
+	m := NewModelForTest(120, 30)
+	m.currentView = viewOutput
+	m.running = true
+	m.executionID = 7
+	m.cancelFn = func() { canceled = true }
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	got := updated.(model)
+	if !canceled {
+		t.Fatal("Ctrl+C did not invoke the execution cancellation function")
+	}
+	if got.running || got.cancelFn != nil || got.executionID != 8 {
+		t.Fatalf("Ctrl+C left execution active: running=%v cancelFn=%v id=%d", got.running, got.cancelFn, got.executionID)
+	}
+	if cmd == nil {
+		t.Fatal("Ctrl+C should quit the Bubble Tea program")
+	}
+}
+
 func TestExecutionStreamChunkAppearsBeforeCompletion(t *testing.T) {
 	m := NewModelForTest(120, 30)
 	m.currentView = viewOutput

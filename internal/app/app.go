@@ -456,6 +456,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.running = false
+		m.cancelFn = nil
 		m.outputResult = &msg.result
 		m.setViewportOutput()
 		m.viewport.GotoTop()
@@ -475,6 +476,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.running = false
 		msg.result.Output = m.executionOutput
+		m.cancelFn = nil
 		m.outputResult = &msg.result
 		m.setViewportOutput()
 		m.viewport.GotoTop()
@@ -545,6 +547,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.outputResult = nil
 				return m, nil
 			case "ctrl+c":
+				if m.cancelFn != nil {
+					m.cancelFn()
+					m.cancelFn = nil
+				}
+				m.executionID++
+				m.running = false
 				return m, tea.Quit
 			}
 			return m, nil
@@ -621,6 +629,7 @@ func (m model) executeCommand(command string) (tea.Model, tea.Cmd) {
 func (m model) executeCommandWithArgs(command string, structuredArgs []string) (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	stream := make(chan execStreamEvent, 32)
+	done := make(chan struct{})
 	m.cancelFn = cancel
 	m.running = true
 	m.executionID++
@@ -652,6 +661,7 @@ func (m model) executeCommandWithArgs(command string, structuredArgs []string) (
 		execCmd.Stderr = writer
 
 		if err := execCmd.Start(); err != nil {
+			close(done)
 			stream <- execStreamEvent{
 				done: true,
 				result: commands.ExecutionResult{
@@ -664,20 +674,24 @@ func (m model) executeCommandWithArgs(command string, structuredArgs []string) (
 		}
 
 		go func() {
-			<-ctx.Done()
-			if execCmd.Process != nil {
-				if runtime.GOOS == "windows" {
-					exec.Command("taskkill", "/F", "/T", "/PID",
-						strconv.Itoa(execCmd.Process.Pid)).Run()
-				} else {
-					execCmd.Process.Kill()
+			select {
+			case <-ctx.Done():
+				if execCmd.Process != nil {
+					if runtime.GOOS == "windows" {
+						exec.Command("taskkill", "/F", "/T", "/PID",
+							strconv.Itoa(execCmd.Process.Pid)).Run()
+					} else {
+						execCmd.Process.Kill()
+					}
 				}
+			case <-done:
 			}
 		}()
 
 		go func() {
 			err := execCmd.Wait()
 			duration := time.Since(start)
+			close(done)
 
 			exitCode := 0
 			if err != nil {
@@ -984,6 +998,10 @@ func (m *model) toggleUpdateChannel() tea.Cmd {
 	} else {
 		m.updateChannel = update.Stable
 	}
+	m.updateDecision = nil
+	m.updateConfirm = false
+	m.updateHandoff = false
+	m.updateError = nil
 
 	channel := settings.Channel(m.updateChannel)
 	state, err := m.updateService.Store.Load()
@@ -1008,16 +1026,7 @@ func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		return m, m.startUpdateCheck(true)
 	case "c", "C":
-		if m.updateChannel == update.Stable {
-			m.updateChannel = update.Beta
-		} else {
-			m.updateChannel = update.Stable
-		}
-		state, err := m.updateService.Store.Load()
-		if err == nil {
-			state.Channel = settings.Channel(m.updateChannel)
-			_ = m.updateService.Store.Save(state)
-		}
+		return m, m.toggleUpdateChannel()
 	case "l":
 		if m.updateDecision != nil && !m.updateDecision.Mandatory {
 			_ = m.updateService.Defer(m.updateDecision.Version)

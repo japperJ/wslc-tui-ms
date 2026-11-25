@@ -81,8 +81,21 @@ func (s Service) Check(ctx context.Context, channel Channel, manual bool) (Decis
 	if selected == nil {
 		return Decision{Mandatory: minimum}, nil
 	}
-	if !newer(selected.Tag, s.CurrentVersion) && !minimum {
+	selectedVersion, selectedErr := parseVersion(selected.Tag)
+	if selectedErr != nil {
 		return Decision{}, nil
+	}
+	currentVersion, currentErr := parseVersion(s.CurrentVersion)
+	if minimum {
+		policyVersion, policyErr := parseVersion(policy.MinimumSupportedVersion)
+		if policyErr == nil && compare(selectedVersion, policyVersion) < 0 {
+			return Decision{Mandatory: true}, nil
+		}
+		if currentErr == nil && compare(selectedVersion, currentVersion) <= 0 {
+			return Decision{Mandatory: true}, nil
+		}
+	} else if currentErr != nil || compare(selectedVersion, currentVersion) <= 0 {
+		return Decision{Mandatory: minimum}, nil
 	}
 	if !minimum && state.Deferred == selected.Tag {
 		return Decision{}, nil
