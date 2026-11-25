@@ -85,8 +85,8 @@ func TestMandatoryPolicyDoesNotOfferOlderOrCurrentRelease(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !d.Mandatory || d.Available {
-				t.Fatalf("decision=%+v, want mandatory state without selected release", d)
+			if !d.Mandatory || d.Available || d.RequiredVersion != "v1.2.0" {
+				t.Fatalf("decision=%+v, want mandatory state with policy version and no selected release", d)
 			}
 		})
 	}
@@ -103,6 +103,31 @@ func TestPrereleaseNumericIdentifiersCompareNumerically(t *testing.T) {
 	}
 	if compare(a, b) <= 0 {
 		t.Fatalf("beta.10 should sort after beta.2")
+	}
+}
+
+func TestPrereleaseNumericIdentifiersCompareWithoutIntegerOverflow(t *testing.T) {
+	huge, err := parseVersion("v2.0.0-beta.100000000000000000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	small, err := parseVersion("v2.0.0-beta.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compare(huge, small) <= 0 {
+		t.Fatalf("beta.100000000000000000000 should sort after beta.2")
+	}
+	if compare(small, huge) >= 0 {
+		t.Fatalf("beta.2 should sort before beta.100000000000000000000")
+	}
+
+	longer, err := parseVersion("v2.0.0-beta.100000000000000000001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compare(huge, longer) >= 0 {
+		t.Fatalf("beta.100000000000000000001 should sort after beta.100000000000000000000")
 	}
 }
 
