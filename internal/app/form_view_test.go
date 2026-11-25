@@ -55,7 +55,7 @@ func TestFormViewRendersSectionsAndStatsDefault(t *testing.T) {
 			t.Errorf("form view missing section %q", section)
 		}
 	}
-	if !strings.Contains(view, "wslc stats --format table") {
+	if !strings.Contains(view, "wslc stats --format json") {
 		t.Errorf("form view missing stats default command: %q", view)
 	}
 	if !strings.Contains(view, "[ ]") {
@@ -78,8 +78,8 @@ func TestCatalogFormsOpenAndBuildAcceptanceCommands(t *testing.T) {
 			name:     "stats defaults",
 			category: "Container", command: "stats",
 			wantView:    viewForm,
-			wantDisplay: "wslc stats --format table",
-			wantArgs:    []string{"wslc", "stats", "--format", "table"},
+			wantDisplay: "wslc stats --format json",
+			wantArgs:    []string{"wslc", "stats", "--format", "json"},
 		},
 		{
 			name:     "tag source and target",
