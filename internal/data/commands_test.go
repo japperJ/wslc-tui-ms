@@ -200,13 +200,49 @@ func TestStatsSchemaUsesSupportedOptions(t *testing.T) {
 	if len(stats.Schema.Arguments) != 1 || !stats.Schema.Arguments[0].Repeatable || stats.Schema.Arguments[0].Required {
 		t.Fatalf("stats should accept zero or more containers: %#v", stats.Schema.Arguments)
 	}
-	if got := stats.Schema.Options[0]; got.Flag != "--format" || got.Kind != commands.OptionKindSelect || !reflect.DeepEqual(got.Choices, []string{"table", "json"}) {
+	if got := stats.Schema.Options[0]; got.Flag != "--format" || got.Kind != commands.OptionKindSelect || !reflect.DeepEqual(got.Choices, []string{"json", "table"}) || got.Default != "json" {
 		t.Fatalf("stats format option = %#v", got)
 	}
 	for _, option := range stats.Schema.Options {
 		if option.Flag == "--no-stream" {
 			t.Fatal("stats schema contains unsupported --no-stream option")
 		}
+	}
+}
+
+// Format-aware commands should open with JSON selected so generated defaults
+// favor machine-readable output.
+func TestCatalogFormatDefaultsToJSON(t *testing.T) {
+	for _, test := range []struct{ category, command string }{
+		{"Container", "ls"},
+		{"Container", "stats"},
+		{"Image", "ls"},
+		{"Network", "ls"},
+		{"Volume", "ls"},
+		{"System", "info"},
+	} {
+		t.Run(test.category+"/"+test.command, func(t *testing.T) {
+			command := catalogCommand(t, test.category, test.command)
+			option := findOption(t, command.Schema, "--format")
+			if option.Default != "json" {
+				t.Fatalf("--format default = %q, want json", option.Default)
+			}
+
+			result := commands.Build(commandTokens(command), *command.Schema, nil, nil)
+			if len(result.Errors) != 0 {
+				t.Fatalf("default build returned errors: %v", result.Errors)
+			}
+			for index, arg := range result.Args {
+				if arg != "--format" {
+					continue
+				}
+				if index+1 >= len(result.Args) || result.Args[index+1] != "json" {
+					t.Fatalf("default --format value = %#v, want json", result.Args[index:])
+				}
+				return
+			}
+			t.Fatalf("default build omitted --format: %#v", result.Args)
+		})
 	}
 }
 
@@ -374,20 +410,17 @@ func legacyBase(command commands.Command) []string {
 // These entries intentionally use legacy examples or aliases that are not a
 // one-to-one representation of the schema's canonical invocation.
 var catalogMigrationExceptions = map[string]string{
-	"Container/ls":     "legacy Full selects JSON and --all; schema defaults are table and no --all",
+	"Container/ls":     "legacy Full selects JSON and --all; schema defaults are JSON and no --all",
 	"Container/run":    "legacy Full is an example with -d and --name values not represented by defaults",
 	"Container/create": "legacy Full is an example with a --name value not represented by defaults",
 	"Container/exec":   "legacy Full supplies literal bash for the required repeatable command",
 	"Container/stop":   "legacy Full omits the schema's default --time value",
 	"Container/kill":   "legacy Full omits the schema's default --signal value",
 	"Container/export": "legacy Full supplies an -o value while the schema has no output default",
-	"Image/ls":         "legacy Full selects JSON while the schema defaults to table",
 	"Image/save":       "legacy Full supplies an -o value while the schema has no output default",
 	"Image/load":       "legacy Full supplies an -i value while the schema has no input default",
 	"Image/build":      "legacy Full supplies a tag and literal path while the schema has no tag default",
-	"Network/ls":       "legacy Full selects JSON while the schema defaults to table",
 	"Network/create":   "legacy Full omits the schema's default bridge driver",
-	"Volume/ls":        "legacy Full selects JSON while the schema defaults to table",
 	"Session/run":      "legacy Full supplies only the session while the schema requires a command",
 }
 
@@ -403,7 +436,7 @@ func TestCatalogRepresentativeCommandGeneration(t *testing.T) {
 			name:    "stats defaults",
 			command: catalogCommand(t, "Container", "stats"),
 			rows:    [][]string{{"one"}, {"two"}},
-			want:    []string{"wslc", "stats", "one", "two", "--format", "table"},
+			want:    []string{"wslc", "stats", "one", "two", "--format", "json"},
 		},
 		{
 			name:    "tag positional order",
@@ -582,8 +615,8 @@ func TestWslc301CommandsAreCataloged(t *testing.T) {
 
 	info := catalogCommand(t, "System", "info")
 	infoFormat := findOption(t, info.Schema, "--format")
-	if infoFormat.Kind != commands.OptionKindSelect || !reflect.DeepEqual(infoFormat.Choices, []string{"json", "table"}) {
-		t.Errorf("info --format = %#v, want select of json/table", infoFormat)
+	if infoFormat.Kind != commands.OptionKindSelect || !reflect.DeepEqual(infoFormat.Choices, []string{"json", "table"}) || infoFormat.Default != "json" {
+		t.Errorf("info --format = %#v, want select of json/table with json default", infoFormat)
 	}
 
 	events := catalogCommand(t, "System", "events")
@@ -642,7 +675,7 @@ func TestStatsBuildsWithZeroContainerRows(t *testing.T) {
 	if len(result.Errors) != 0 {
 		t.Fatalf("zero rows returned errors: %v", result.Errors)
 	}
-	if want := []string{"wslc", "stats", "--format", "table"}; !reflect.DeepEqual(result.Args, want) {
+	if want := []string{"wslc", "stats", "--format", "json"}; !reflect.DeepEqual(result.Args, want) {
 		t.Fatalf("zero rows Args = %#v, want %#v", result.Args, want)
 	}
 }

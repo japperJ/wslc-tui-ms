@@ -21,7 +21,7 @@ var AllCommands = map[string][]commands.Command{
 			},
 			Flags: []commands.Flag{
 				{Short: "-a", Long: "--all", Description: "Show all containers (default shows just running)"},
-				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "json"},
 				{Short: "", Long: "--filter", Description: "Filter output based on conditions"},
 				{Short: "", Long: "--no-trunc", Description: "Don't truncate output"},
 			},
@@ -233,18 +233,19 @@ var AllCommands = map[string][]commands.Command{
 		},
 		{
 			Name:        "stats",
-			Full:        "wslc stats --format table",
+			Full:        "wslc stats --format json",
 			Category:    "Container",
 			Description: "Display container resource usage statistics",
 			Usage:       "wslc stats [flags] [CONTAINER...]",
 			Examples: []string{
 				"wslc stats",
+				"wslc stats --format json",
 				"wslc stats --format table",
 				"wslc stats --all --format json",
 			},
 			Flags: []commands.Flag{
 				{Short: "-a", Long: "--all", Description: "Show all containers regardless of state"},
-				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "json"},
 				{Short: "", Long: "--no-trunc", Description: "Do not truncate output"},
 			},
 			Difficulty: "beginner",
@@ -330,7 +331,7 @@ var AllCommands = map[string][]commands.Command{
 			},
 			Flags: []commands.Flag{
 				{Short: "-a", Long: "--all", Description: "Show all images (not just dangling)"},
-				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "json"},
 				{Short: "", Long: "--filter", Description: "Filter output based on conditions"},
 				{Short: "", Long: "--no-trunc", Description: "Don't truncate output"},
 			},
@@ -510,7 +511,7 @@ var AllCommands = map[string][]commands.Command{
 				"wslc network ls --format json",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "json"},
 				{Short: "", Long: "--filter", Description: "Provide filter values"},
 			},
 			Difficulty: "beginner",
@@ -627,7 +628,7 @@ var AllCommands = map[string][]commands.Command{
 				"wslc volume ls --format json",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "json"},
 				{Short: "", Long: "--filter", Description: "Provide filter values"},
 			},
 			Difficulty: "beginner",
@@ -790,7 +791,7 @@ var AllCommands = map[string][]commands.Command{
 		},
 		{
 			Name:        "info",
-			Full:        "wslc info --format table",
+			Full:        "wslc info --format json",
 			Category:    "System",
 			Description: "Display system-wide information (client version, session manager version, and active sessions)",
 			Usage:       "wslc info [flags]",
@@ -799,7 +800,7 @@ var AllCommands = map[string][]commands.Command{
 				"wslc info --format json",
 			},
 			Flags: []commands.Flag{
-				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "table"},
+				{Short: "", Long: "--format", Description: "Output formatting (json or table)", Default: "json"},
 			},
 			Difficulty: "beginner",
 			Tags:       []string{"info", "system", "status", "version", "sessions"},
@@ -921,8 +922,14 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 	td := func(flag, defaultValue string) commands.Option {
 		return commands.Option{Flag: flag, Kind: commands.OptionKindText, Default: defaultValue}
 	}
+	// s is a select whose default is its first choice. Format options list json
+	// first so the generated default command uses machine-readable output.
 	s := func(flag string, choices ...string) commands.Option {
-		return commands.Option{Flag: flag, Kind: commands.OptionKindSelect, Default: "table", Choices: choices}
+		defaultValue := ""
+		if len(choices) > 0 {
+			defaultValue = choices[0]
+		}
+		return commands.Option{Flag: flag, Kind: commands.OptionKindSelect, Default: defaultValue, Choices: choices}
 	}
 	// so is a select with no implicit default, for flags that are omitted unless
 	// the user picks a value.
@@ -951,7 +958,7 @@ func catalogSchema(category, name string) *commands.CommandSchema {
 		"Container/restart": {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--signal"), n("--timeout", "")}},
 		"Container/rm":      {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{b("--force")}},
 		"Container/inspect": {Arguments: []commands.Argument{r("containers", true, true, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--type"), b("--size"), so("--format", "json")}},
-		"Container/stats":   {Arguments: []commands.Argument{r("containers", false, true, commands.ResourceTypeContainer)}, Options: []commands.Option{s("--format", "table", "json"), b("--all"), b("--no-trunc")}},
+		"Container/stats":   {Arguments: []commands.Argument{r("containers", false, true, commands.ResourceTypeContainer)}, Options: []commands.Option{s("--format", "json", "table"), b("--all"), b("--no-trunc")}},
 		"Container/attach":  {Arguments: []commands.Argument{r("container", true, false, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--detach-keys"), b("--no-stdin")}},
 		"Container/export":  {Arguments: []commands.Argument{r("container", true, false, commands.ResourceTypeContainer)}, Options: []commands.Option{t("--output")}},
 		"Container/cp":      {Arguments: []commands.Argument{a("source", true, false), a("target", true, false)}, Options: []commands.Option{b("--archive")}},
