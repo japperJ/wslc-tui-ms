@@ -232,17 +232,18 @@ type model struct {
 
 	// Update state. The service is injectable so startup checks remain testable
 	// and never couple the TUI to a network implementation.
-	updateService  update.Service
-	updateChannel  update.Channel
-	channelStatus  string
-	updateDecision *update.Decision
-	updateError    error
-	updateChecking bool
-	updateConfirm  bool
-	updateHandoff  bool
-	updateStatus   string
-	updateLaunch   func(update.Handoff) error
-	discovery      discovery.Discovery
+	updateService    update.Service
+	updateChannel    update.Channel
+	channelStatus    string
+	updateDecision   *update.Decision
+	updateError      error
+	updateChecking   bool
+	updateGeneration int
+	updateConfirm    bool
+	updateHandoff    bool
+	updateStatus     string
+	updateLaunch     func(update.Handoff) error
+	discovery        discovery.Discovery
 }
 
 type clickRegion struct {
@@ -297,9 +298,10 @@ func pollExecution(id int, events <-chan execStreamEvent) tea.Cmd {
 
 type splashTickMsg struct{}
 type updateResultMsg struct {
-	decision update.Decision
-	err      error
-	manual   bool
+	decision   update.Decision
+	err        error
+	manual     bool
+	generation int
 }
 
 type updateInstallMsg struct{ err error }
@@ -416,7 +418,7 @@ func (m model) Init() tea.Cmd {
 	if m.splashActive {
 		cmds = append(cmds, splashTick())
 	}
-	cmds = append(cmds, m.updateCheckCommand(false))
+	cmds = append(cmds, m.updateCheckCommand(false, m.updateGeneration))
 	return tea.Batch(cmds...)
 }
 
@@ -456,6 +458,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.running = false
+		m.cancelFn = nil
 		m.outputResult = &msg.result
 		m.setViewportOutput()
 		m.viewport.GotoTop()
@@ -475,24 +478,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.running = false
 		msg.result.Output = m.executionOutput
+		m.cancelFn = nil
 		m.outputResult = &msg.result
 		m.setViewportOutput()
 		m.viewport.GotoTop()
 		return m, nil
 	case updateResultMsg:
+		if msg.generation != m.updateGeneration {
+			// A newer check superseded this one; its result would describe the
+			// previously selected channel (or an older request).
+			return m, nil
+		}
 		m.updateChecking = false
 		m.updateError = msg.err
-		if msg.manual && msg.err == nil && !msg.decision.Available && !msg.decision.Mandatory {
+		if msg.err == nil && msg.decision.Available {
+			m.updateStatus = ""
+			m.updateDecision = &msg.decision
+			m.currentView = viewUpdate
+			return m, nil
+		}
+		if msg.err == nil && msg.decision.Mandatory {
+			// The policy requires a newer build, but no installable release is
+			// available yet. Keep it out of the actionable update view, whose
+			// version, asset, and notes would all be empty.
+			m.updateDecision = nil
+			m.updateStatus = requiredUpdateUnavailableStatus(msg.decision, m.updateChannel)
+			return m, nil
+		}
+		if msg.manual && msg.err == nil {
 			m.updateStatus = "No newer update found."
 			// "dev" is not SemVer, so every release compares as older and the
 			// result above is a false negative rather than a genuine up-to-date.
 			if m.updateService.IsDevelopmentBuild() {
 				m.updateStatus = "Development build (" + buildinfo.Version + ") has no version to compare against releases."
 			}
-		}
-		if msg.err == nil && (msg.decision.Available || msg.decision.Mandatory) {
-			m.updateDecision = &msg.decision
-			m.currentView = viewUpdate
 		}
 		return m, nil
 	case updateInstallMsg:
@@ -545,6 +564,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.outputResult = nil
 				return m, nil
 			case "ctrl+c":
+				if m.cancelFn != nil {
+					m.cancelFn()
+					m.cancelFn = nil
+				}
+				m.executionID++
+				m.running = false
 				return m, tea.Quit
 			}
 			return m, nil
@@ -621,6 +646,7 @@ func (m model) executeCommand(command string) (tea.Model, tea.Cmd) {
 func (m model) executeCommandWithArgs(command string, structuredArgs []string) (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	stream := make(chan execStreamEvent, 32)
+	done := make(chan struct{})
 	m.cancelFn = cancel
 	m.running = true
 	m.executionID++
@@ -652,6 +678,7 @@ func (m model) executeCommandWithArgs(command string, structuredArgs []string) (
 		execCmd.Stderr = writer
 
 		if err := execCmd.Start(); err != nil {
+			close(done)
 			stream <- execStreamEvent{
 				done: true,
 				result: commands.ExecutionResult{
@@ -664,20 +691,24 @@ func (m model) executeCommandWithArgs(command string, structuredArgs []string) (
 		}
 
 		go func() {
-			<-ctx.Done()
-			if execCmd.Process != nil {
-				if runtime.GOOS == "windows" {
-					exec.Command("taskkill", "/F", "/T", "/PID",
-						strconv.Itoa(execCmd.Process.Pid)).Run()
-				} else {
-					execCmd.Process.Kill()
+			select {
+			case <-ctx.Done():
+				if execCmd.Process != nil {
+					if runtime.GOOS == "windows" {
+						exec.Command("taskkill", "/F", "/T", "/PID",
+							strconv.Itoa(execCmd.Process.Pid)).Run()
+					} else {
+						execCmd.Process.Kill()
+					}
 				}
+			case <-done:
 			}
 		}()
 
 		go func() {
 			err := execCmd.Wait()
 			duration := time.Since(start)
+			close(done)
 
 			exitCode := 0
 			if err != nil {
@@ -964,10 +995,12 @@ func (m model) handleRegionClick(action string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) updateCheckCommand(manual bool) tea.Cmd {
+func (m model) updateCheckCommand(manual bool, generation int) tea.Cmd {
+	channel := m.updateChannel
+	service := m.updateService
 	return func() tea.Msg {
-		decision, err := m.updateService.Check(context.Background(), m.updateChannel, manual)
-		return updateResultMsg{decision: decision, err: err, manual: manual}
+		decision, err := service.Check(context.Background(), channel, manual)
+		return updateResultMsg{decision: decision, err: err, manual: manual, generation: generation}
 	}
 }
 
@@ -975,7 +1008,8 @@ func (m *model) startUpdateCheck(manual bool) tea.Cmd {
 	m.updateChecking = true
 	m.updateError = nil
 	m.updateStatus = ""
-	return m.updateCheckCommand(manual)
+	m.updateGeneration++
+	return m.updateCheckCommand(manual, m.updateGeneration)
 }
 
 func (m *model) toggleUpdateChannel() tea.Cmd {
@@ -984,6 +1018,10 @@ func (m *model) toggleUpdateChannel() tea.Cmd {
 	} else {
 		m.updateChannel = update.Stable
 	}
+	m.updateDecision = nil
+	m.updateConfirm = false
+	m.updateHandoff = false
+	m.updateError = nil
 
 	channel := settings.Channel(m.updateChannel)
 	state, err := m.updateService.Store.Load()
@@ -1000,6 +1038,16 @@ func (m *model) toggleUpdateChannel() tea.Cmd {
 	return m.startUpdateCheck(true)
 }
 
+// requiredUpdateUnavailableStatus describes a policy-required upgrade that has
+// no installable release on the selected channel yet. It keeps the actionable
+// update view closed because that view would have no version or asset to offer.
+func requiredUpdateUnavailableStatus(decision update.Decision, channel update.Channel) string {
+	if decision.RequiredVersion == "" {
+		return "A required update is not available on the " + string(channel) + " channel yet."
+	}
+	return "Required update " + decision.RequiredVersion + " is not available on the " + string(channel) + " channel yet."
+}
+
 func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -1008,16 +1056,7 @@ func (m model) handleUpdateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		return m, m.startUpdateCheck(true)
 	case "c", "C":
-		if m.updateChannel == update.Stable {
-			m.updateChannel = update.Beta
-		} else {
-			m.updateChannel = update.Stable
-		}
-		state, err := m.updateService.Store.Load()
-		if err == nil {
-			state.Channel = settings.Channel(m.updateChannel)
-			_ = m.updateService.Store.Save(state)
-		}
+		return m, m.toggleUpdateChannel()
 	case "l":
 		if m.updateDecision != nil && !m.updateDecision.Mandatory {
 			_ = m.updateService.Defer(m.updateDecision.Version)

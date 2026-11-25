@@ -22,8 +22,13 @@ type Release struct {
 }
 type Policy struct{ MinimumSupportedVersion, Message string }
 type Decision struct {
-	Available                    bool
-	Mandatory                    bool
+	Available bool
+	Mandatory bool
+	// RequiredVersion carries the minimum supported version from policy when the
+	// running build must be upgraded. It is set even when no installable release
+	// exists yet, so callers can report why the update is required without
+	// treating an empty Version as actionable.
+	RequiredVersion              string
 	Version, Channel, Notes, URL string
 	Asset                        Asset
 	Release                      Release

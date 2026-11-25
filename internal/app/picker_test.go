@@ -191,3 +191,13 @@ func TestEditingPickerValueConvertsOnlyEditedRowToFreeText(t *testing.T) {
 		t.Fatal("un-edited row lost picker-origin marker")
 	}
 }
+
+func TestRepeatablePickerValidationUsesRepeatableArgumentForExtraRows(t *testing.T) {
+	form := newFormState(pickerCommand(true), nil)
+	form.argumentRows = append(form.argumentRows, []string{"worker"})
+	form.pickerRows[1] = true
+
+	if err := form.validatePickerValues(1, []string{"web"}); err == nil {
+		t.Fatal("stale repeatable picker value should be rejected")
+	}
+}

@@ -53,11 +53,52 @@ func compare(a, b version) int {
 		return -1
 	}
 	for i := 0; i < len(a.pre) && i < len(b.pre); i++ {
-		if a.pre[i] != b.pre[i] {
+		aNumeric := isNumericIdentifier(a.pre[i])
+		bNumeric := isNumericIdentifier(b.pre[i])
+		switch {
+		case aNumeric && bNumeric:
+			if c := compareNumericIdentifiers(a.pre[i], b.pre[i]); c != 0 {
+				return c
+			}
+		case aNumeric:
+			return -1
+		case bNumeric:
+			return 1
+		case a.pre[i] != b.pre[i]:
 			return strings.Compare(a.pre[i], b.pre[i])
 		}
 	}
 	return len(a.pre) - len(b.pre)
+}
+
+// isNumericIdentifier reports whether an identifier consists only of digits.
+// SemVer numeric identifiers have no upper bound, so they cannot be parsed into
+// an int without risking overflow on valid input such as "beta.100000000000000000000".
+func isNumericIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// compareNumericIdentifiers compares two numeric identifiers by value without
+// converting them to machine integers. After trimming leading zeroes, a longer
+// identifier is larger; equal-length identifiers compare lexically.
+func compareNumericIdentifiers(a, b string) int {
+	a = strings.TrimLeft(a, "0")
+	b = strings.TrimLeft(b, "0")
+	if len(a) != len(b) {
+		if len(a) < len(b) {
+			return -1
+		}
+		return 1
+	}
+	return strings.Compare(a, b)
 }
 
 func newer(candidate, current string) bool {

@@ -79,9 +79,24 @@ func (s Service) Check(ctx context.Context, channel Channel, manual bool) (Decis
 		return Decision{}, err
 	}
 	if selected == nil {
-		return Decision{Mandatory: minimum}, nil
+		decision := Decision{Mandatory: minimum}
+		if minimum {
+			decision.RequiredVersion = policy.MinimumSupportedVersion
+		}
+		return decision, nil
 	}
-	if !newer(selected.Tag, s.CurrentVersion) && !minimum {
+	selectedVersion, selectedErr := parseVersion(selected.Tag)
+	if selectedErr != nil {
+		return Decision{}, nil
+	}
+	currentVersion, currentErr := parseVersion(s.CurrentVersion)
+	if minimum {
+		policyVersion, policyErr := parseVersion(policy.MinimumSupportedVersion)
+		if (policyErr == nil && compare(selectedVersion, policyVersion) < 0) ||
+			(currentErr == nil && compare(selectedVersion, currentVersion) <= 0) {
+			return Decision{Mandatory: true, RequiredVersion: policy.MinimumSupportedVersion}, nil
+		}
+	} else if currentErr != nil || compare(selectedVersion, currentVersion) <= 0 {
 		return Decision{}, nil
 	}
 	if !minimum && state.Deferred == selected.Tag {
@@ -104,7 +119,11 @@ func (s Service) Check(ctx context.Context, channel Channel, manual bool) (Decis
 	} else {
 		return Decision{}, fmt.Errorf("checksum manifest is missing %s", assetName)
 	}
-	return Decision{Available: true, Mandatory: minimum, Version: selected.Tag, Channel: string(channel), Notes: selected.Notes, URL: selected.URL, Asset: asset, Release: *selected}, nil
+	decision := Decision{Available: true, Mandatory: minimum, Version: selected.Tag, Channel: string(channel), Notes: selected.Notes, URL: selected.URL, Asset: asset, Release: *selected}
+	if minimum {
+		decision.RequiredVersion = policy.MinimumSupportedVersion
+	}
+	return decision, nil
 }
 func (s Service) Defer(version string) error {
 	state, err := s.Store.Load()

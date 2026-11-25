@@ -252,10 +252,86 @@ func TestFocusedCommandSearchAcceptsChannelShortcutCharacters(t *testing.T) {
 
 func TestUpdateChannelAcceptsUppercaseC(t *testing.T) {
 	m := appWithDecision(t)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
 	m = updated.(model)
 	if m.updateChannel != update.Beta {
 		t.Fatalf("uppercase C channel = %q, want %q", m.updateChannel, update.Beta)
+	}
+	if cmd == nil {
+		t.Fatal("upper-case C should start a check for the selected channel")
+	}
+	if m.updateDecision != nil || m.updateConfirm || m.updateHandoff {
+		t.Fatalf("channel switch retained stale update state: decision=%v confirm=%v handoff=%v", m.updateDecision, m.updateConfirm, m.updateHandoff)
+	}
+}
+
+func TestStaleUpdateResultAfterChannelSwitchIsIgnored(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.updateService = update.Service{
+		Store:          settings.NewStore(filepath.Join(t.TempDir(), "settings.json")),
+		CurrentVersion: "v1.0.0",
+	}
+	m.updateChannel = update.Stable
+	m.inputFocused = false
+	m.textInput.Blur()
+	m.updateChecking = true
+	m.updateGeneration = 1 // an earlier Stable check is still in flight
+
+	stale := updateResultMsg{
+		generation: 1,
+		manual:     true,
+		decision: update.Decision{
+			Available: true,
+			Version:   "v2.0.0",
+			Channel:   string(update.Stable),
+			Asset:     update.Asset{Name: "payload.zip"},
+		},
+	}
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(model)
+	if cmd == nil || m.updateChannel != update.Beta {
+		t.Fatalf("channel switch did not start a Beta check: channel=%q cmd=%v", m.updateChannel, cmd != nil)
+	}
+	if m.updateGeneration != 2 {
+		t.Fatalf("generation = %d, want 2", m.updateGeneration)
+	}
+
+	updated, _ = m.Update(stale)
+	m = updated.(model)
+	if m.updateDecision != nil {
+		t.Fatalf("stale %s result replaced the new channel decision: %+v", update.Stable, m.updateDecision)
+	}
+	if m.currentView != viewCommands {
+		t.Fatalf("stale result opened view %v", m.currentView)
+	}
+	if !m.updateChecking {
+		t.Fatal("stale result cleared the in-flight check state")
+	}
+}
+
+func TestMandatoryUpdateWithoutReleaseDoesNotOpenBlankUpdateView(t *testing.T) {
+	m := NewModelForTest(120, 30)
+	m.updateService = update.Service{
+		Store:          settings.NewStore(filepath.Join(t.TempDir(), "settings.json")),
+		CurrentVersion: "v1.0.0",
+	}
+	m.updateChecking = true
+
+	updated, _ := m.Update(updateResultMsg{
+		generation: m.updateGeneration,
+		decision:   update.Decision{Mandatory: true, RequiredVersion: "v1.2.0"},
+	})
+	m = updated.(model)
+
+	if m.currentView != viewCommands || m.updateDecision != nil {
+		t.Fatalf("mandatory decision without an installable release opened the update view: view=%v decision=%+v", m.currentView, m.updateDecision)
+	}
+	if !strings.Contains(m.updateStatus, "v1.2.0") {
+		t.Fatalf("status = %q, want the required version", m.updateStatus)
+	}
+	if !strings.Contains(stripAnsi(m.renderUpdateBanner()), "v1.2.0") {
+		t.Fatalf("banner omits required-update status: %q", m.renderUpdateBanner())
 	}
 }
 

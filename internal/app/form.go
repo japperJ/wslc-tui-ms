@@ -192,7 +192,11 @@ func (f *formState) validatePickerValues(field int, available []string) error {
 	}
 	for _, value := range f.pickerValues(field) {
 		if !allowed[value] {
-			return fmt.Errorf("selected %q for argument %q is no longer available", value, f.commandSchema.Arguments[field].Name)
+			argument, ok := f.pickerArgument(field)
+			if !ok {
+				return fmt.Errorf("selected %q is no longer available", value)
+			}
+			return fmt.Errorf("selected %q for argument %q is no longer available", value, argument.Name)
 		}
 	}
 	return nil
